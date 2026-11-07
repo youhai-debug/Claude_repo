@@ -404,6 +404,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   const hasNight = (d0) => byWakeDay().has(dayKey(d0));
   const nightLabel = (d0) => d0 === startOfDay(Date.now()) ? "ゆうべ" : `${md(d0)}の朝まで`;
   const joinNote = (note, tags) => [note, ...tags].filter(Boolean).join("、");
+  const noteTags = (note) => (note || "").split("、").map((x) => x.trim()).filter(Boolean);
   // Best guess for when a sleep that ended at `wake` started: the usual bedtime before it.
   function guessBed(wake) {
     const u = usual();
@@ -414,7 +415,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   }
 
   let ui = { mode: null, tags: new Set() }; // mode: null | "ask-bed"
-  const resetUi = () => { ui = { mode: null, tags: new Set() }; };
+  const resetUi = () => { ui = { mode: null, tags: new Set(), followClosed: ui.followClosed }; };
 
   function missingNights() {
     const all = closed();
@@ -440,8 +441,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     if (o) {
       if (now - o.bed <= 20 * H) {
         el.innerHTML = `<h2>おやすみ中</h2>
-          <p class="sub">${md(o.bed)} ${hm(o.bed)} から（${durJa((now - o.bed) / MIN)}経過）。当てはまるものがあればタップしてから「いま起きた」。</p>
-          ${tagsHtml()}
+          <p class="sub">${md(o.bed)} ${hm(o.bed)} から（${durJa((now - o.bed) / MIN)}経過）。起きたら押すだけ。気分やお酒などは押した後に聞きます。</p>
           <button type="button" class="moon big" data-act="wake-now">いま起きた</button>
           <div class="center"><button type="button" class="link danger" data-act="cancel-sleep">${ui.confirmCancel ? "本当に取り消す" : "「いまから寝る」を取り消す"}</button></div>`;
       } else {
@@ -450,7 +450,6 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
           <p class="sub">${md(o.bed)} ${hm(o.bed)} に寝た記録が残っています。起きた時刻を合わせて記録してください。</p>
           <div class="times one">${stepper("起きた", "wakeMs", `${md(ui.wakeMs).replace(/\(.\)/, "")} ${hm(ui.wakeMs)}`)}</div>
           <p class="dur">睡眠 <span class="num">${durShort((ui.wakeMs - o.bed) / MIN)}</span></p>
-          ${tagsHtml()}
           <button type="button" class="primary big" data-act="save-late">この時刻で記録</button>
           <div class="center"><button type="button" class="link danger" data-act="cancel-sleep">${ui.confirmCancel ? "本当に消す" : "この記録を消す"}</button></div>`;
       }
@@ -468,7 +467,6 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         </div>
         <div class="center"><button type="button" class="chip-toggle" data-act="toggle-unknown" aria-pressed="${!!ui.unknown}">いつ寝たか分からない</button></div>
         <p class="dur">${ui.unknown ? '<span class="muted">睡眠時間は「不明」として記録し、平均の計算からは外します</span>' : `睡眠 <span class="num">${durShort(dur)}</span> <span class="chip ${level(dur)}">${levelText[level(dur)]}</span>`}</p>
-        ${tagsHtml()}
         <button type="button" class="primary big" data-act="save-ask">記録する</button>
         <div class="center"><button type="button" class="link" data-act="ask-cancel">やめる</button></div>`;
       return;
@@ -478,6 +476,19 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     const d0 = targetDay(), hour = new Date(now).getHours(), morning = hour >= 4 && hour < 15;
     const miss = missingNights();
     let summary = "";
+    // Just woke up: ask mood and tags afterwards; every tap saves immediately.
+    const fresh = closed().filter((e) => e.wake > now - 6 * H && e.wake <= now + 10 * MIN).sort((a, b) => b.wake - a.wake)[0];
+    if (fresh && !ui.followClosed?.has(fresh.id)) {
+      const kn = known(fresh), dur = (fresh.wake - fresh.bed) / MIN;
+      el.innerHTML = `<h2>おはようございます</h2>
+        <p class="done-line">${kn ? hm(fresh.bed) : "不明"} → ${hm(fresh.wake)} <span class="muted" style="font-size:1rem">${kn ? durJa(dur) : ""}</span></p>
+        <p class="sub">記録しました。よければ目覚めの気分と、当てはまるものをタップ（押すたびに保存・あとからでも変えられます）。</p>
+        <div class="tags" role="group" aria-label="目覚めの気分">${QUALITY.map(([v, t]) => `<button type="button" data-act="fq" data-id="${fresh.id}" data-v="${v}" aria-pressed="${fresh.quality === v}">${t}</button>`).join("")}</div>
+        <div class="tags" role="group" aria-label="当てはまるもの">${TAGS.map((t) => `<button type="button" data-act="ftag" data-id="${fresh.id}" data-tag="${t}" aria-pressed="${noteTags(fresh.note).includes(t)}">${t}</button>`).join("")}</div>
+        <div class="center"><button type="button" class="link" data-act="fclose" data-id="${fresh.id}">閉じる</button>
+          <button type="button" class="link" data-act="edit-main" data-id="${fresh.id}">時刻を修正</button></div>`;
+      return;
+    }
     if (hasNight(d0)) {
       const list = byWakeDay().get(dayKey(d0)), kn = list.filter(known);
       const main = (kn.length ? kn : list).reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a));
@@ -537,6 +548,16 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       const u = usual(), days = act === "fill" ? [Number(b.dataset.day)] : missingNights();
       run(b, async () => { for (const d of days) await addNight(d, u.bedM, u.wakeM, "", "usual"); }, `${days.length}日分を記録しました`);
     }
+    else if (act === "fq" || act === "ftag") {
+      const e = entries.find((x) => x.id === b.dataset.id); if (!e) return;
+      let { quality, note } = e;
+      if (act === "fq") { const v = Number(b.dataset.v); quality = quality === v ? null : v; }
+      else { const parts = noteTags(note), t = b.dataset.tag; note = (parts.includes(t) ? parts.filter((x) => x !== t) : [...parts, t]).join("、"); }
+      b.disabled = true;
+      try { await backend.put(e.id, { ...stripId(e), quality, note }); } catch (err) { toast("保存できませんでした"); }
+      b.disabled = false;
+    }
+    else if (act === "fclose") { (ui.followClosed ||= new Set()).add(b.dataset.id); renderToday(); }
     else if (act === "edit-main") startEdit(b.dataset.id);
   });
 
