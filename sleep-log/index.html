@@ -1,0 +1,517 @@
+<title>ねむり帳</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column like a notebook page — verdict, night timeline, entry form, log. */
+:root {
+  --bg: #eceff5; --surface: #f8f9fc; --line: #d3d8e5; --fg: #1c2235; --muted: #5b647e;
+  --accent: #34458a; --accent-fg: #ffffff; --moon: #a97c22; --moon-soft: #f1e6cb;
+  --good: #2e7a58; --warn: #a8731a; --bad: #b0423a;
+  --good-bg: #dcefe5; --warn-bg: #f4e8cf; --bad-bg: #f5dcd9;
+  --track: #e0e4ee;
+  --f-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11152a; --surface: #191e37; --line: #2c3354; --fg: #e3e6f2; --muted: #98a0bf;
+  --accent: #a4b3ff; --accent-fg: #11152a; --moon: #e2bf68; --moon-soft: #3a3423;
+  --good: #63c79a; --warn: #e2ad4c; --bad: #ef7d73;
+  --good-bg: #1d3a31; --warn-bg: #3c3220; --bad-bg: #432427;
+  --track: #232946; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11152a; --surface: #191e37; --line: #2c3354; --fg: #e3e6f2; --muted: #98a0bf;
+  --accent: #a4b3ff; --accent-fg: #11152a; --moon: #e2bf68; --moon-soft: #3a3423;
+  --good: #63c79a; --warn: #e2ad4c; --bad: #ef7d73;
+  --good-bg: #1d3a31; --warn-bg: #3c3220; --bad-bg: #432427;
+  --track: #232946; color-scheme: dark }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.7; }
+.page { max-width: 760px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 36px; }
+h1, h2 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: .04em; }
+h2 { font-size: 1.15rem; font-weight: 600; letter-spacing: .03em; }
+.eyebrow { font-size: .72rem; letter-spacing: .14em; color: var(--muted); font-weight: 500; }
+.num { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.status { font-size: .78rem; color: var(--muted); }
+
+/* Verdict */
+.verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.verdict-line { font-family: var(--f-display); font-size: 1.35rem; font-weight: 600; line-height: 1.5; text-wrap: balance; margin: 0; }
+.chip { display: inline-block; font-family: var(--f-body); font-size: .78rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; vertical-align: middle; letter-spacing: .04em; }
+.chip.good { color: var(--good); background: var(--good-bg); }
+.chip.warn { color: var(--warn); background: var(--warn-bg); }
+.chip.bad { color: var(--bad); background: var(--bad-bg); }
+.chip.none { color: var(--muted); background: var(--track); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.stats > div { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 8px; min-width: 0; }
+.stats dt { font-size: .72rem; color: var(--muted); letter-spacing: .06em; }
+.stats dd { margin: 0; font-family: var(--f-data); font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.stats dd small { font-size: .72rem; color: var(--muted); font-family: var(--f-body); }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Asleep banner */
+.asleep { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--moon-soft); border-radius: 6px; padding: 14px 16px; }
+.asleep strong { font-family: var(--f-display); font-size: 1.05rem; }
+
+/* Timeline */
+.tl { display: flex; flex-direction: column; gap: 4px; }
+.tl-row { display: grid; grid-template-columns: 74px minmax(0, 1fr) 52px; align-items: center; gap: 10px; min-height: 22px; }
+.tl-date { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-date.we { color: var(--accent); }
+.tl-track { position: relative; height: 14px; background: var(--track); border-radius: 2px; }
+.tl-track .goal-zone { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
+.tl-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; min-width: 3px; }
+.tl-bar.good { background: var(--good); } .tl-bar.warn { background: var(--warn); } .tl-bar.bad { background: var(--bad); }
+.tl-bar.open { background: repeating-linear-gradient(90deg, var(--moon) 0 6px, transparent 6px 9px); }
+.tl-dur { font-family: var(--f-data); font-size: .8rem; text-align: right; font-variant-numeric: tabular-nums; }
+.tl-axis { display: grid; grid-template-columns: 74px minmax(0, 1fr) 52px; gap: 10px; }
+.tl-ticks { position: relative; height: 18px; }
+.tl-ticks span { position: absolute; transform: translateX(-50%); font-family: var(--f-data); font-size: .68rem; color: var(--muted); }
+.tl-grid { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid var(--bg); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .76rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* Form */
+form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+label, .label { font-size: .78rem; color: var(--muted); letter-spacing: .05em; }
+input, textarea, select { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; width: 100%; min-width: 0; }
+input[type="datetime-local"] { font-family: var(--f-data); font-size: .9rem; }
+textarea { resize: vertical; min-height: 44px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quality { display: flex; gap: 6px; flex-wrap: wrap; }
+.quality input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.quality label { cursor: pointer; border: 1px solid var(--line); border-radius: 4px; padding: 4px 10px; font-size: .82rem; color: var(--fg); background: var(--surface); letter-spacing: 0; }
+.quality input:checked + label { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.quality input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+.preview { grid-column: 1 / -1; font-size: .88rem; color: var(--muted); min-height: 1.5em; }
+.preview.err { color: var(--bad); }
+.actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+@media (max-width: 520px) { form { grid-template-columns: minmax(0, 1fr); } }
+
+button { font: inherit; cursor: pointer; border-radius: 4px; padding: 8px 16px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 700; }
+button.moon { background: var(--moon); color: var(--bg); border-color: var(--moon); font-weight: 700; }
+button.link { border: none; background: none; padding: 4px 6px; color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+.quick { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Log */
+.log-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+th { text-align: left; font-weight: 500; font-size: .72rem; color: var(--muted); letter-spacing: .06em; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.t { font-family: var(--f-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.note { color: var(--muted); min-width: 120px; }
+td.ops { white-space: nowrap; text-align: right; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.dot.good { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); } .dot.open { background: var(--moon); }
+
+.empty { border: 1px dashed var(--line); border-radius: 6px; padding: 18px; color: var(--muted); font-size: .9rem; }
+.goal-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; }
+.goal-set select { width: auto; padding: 4px 8px; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 4px; font-size: .85rem; z-index: 20; }
+footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
+@media (prefers-reduced-motion: no-preference) { .tl-bar { transition: left .3s, width .3s; } }
+</style>
+
+<div class="page">
+  <header class="top">
+    <div>
+      <div class="eyebrow">SLEEP NOTEBOOK</div>
+      <h1>ねむり帳</h1>
+    </div>
+    <div class="goal-set">
+      <label for="goal">1晩の目標</label>
+      <select id="goal"></select>
+      <span class="status" id="status">読み込み中…</span>
+    </div>
+  </header>
+
+  <div class="asleep" id="asleep" hidden>
+    <div><strong>おやすみ中</strong> <span class="muted" id="asleep-since"></span></div>
+    <button class="moon" type="button" id="btn-wake">いま起きた</button>
+  </div>
+
+  <section aria-labelledby="h-verdict">
+    <div class="sec-head"><h2 id="h-verdict">足りている？</h2><span class="eyebrow">直近7日</span></div>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <section aria-labelledby="h-tl">
+    <div class="sec-head"><h2 id="h-tl">夜のタイムライン</h2><span class="eyebrow">直近14日 · 起床日ごと</span></div>
+    <div id="timeline"></div>
+    <div class="legend">
+      <span><i style="background:var(--good)"></i>目標以上</span>
+      <span><i style="background:var(--warn)"></i>やや不足（目標−1時間まで）</span>
+      <span><i style="background:var(--bad)"></i>不足</span>
+      <span><i style="background:var(--moon)"></i>おやすみ中</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-form">
+    <div class="sec-head"><h2 id="h-form">記録する</h2>
+      <div class="quick"><button type="button" class="moon" id="btn-sleep">いまから寝る</button></div>
+    </div>
+    <form id="form" novalidate>
+      <input type="hidden" id="edit-id">
+      <div class="field"><label for="bed">寝た時刻</label><input type="datetime-local" id="bed" step="300" required></div>
+      <div class="field"><label for="wake">起きた時刻</label><input type="datetime-local" id="wake" step="300"></div>
+      <div class="field wide">
+        <span class="label" id="q-label">目覚めの気分</span>
+        <div class="quality" role="radiogroup" aria-labelledby="q-label" id="quality"></div>
+      </div>
+      <div class="field wide"><label for="note">メモ（カフェイン、夜更かしの理由、昼寝など）</label><textarea id="note" rows="2" maxlength="300"></textarea></div>
+      <div class="preview" id="preview" aria-live="polite"></div>
+      <div class="actions">
+        <button type="submit" class="primary" id="btn-save">記録を保存</button>
+        <button type="button" id="btn-cancel" hidden>編集をやめる</button>
+      </div>
+    </form>
+  </section>
+
+  <section aria-labelledby="h-log">
+    <div class="sec-head"><h2 id="h-log">記録一覧</h2><span class="eyebrow" id="log-count"></span></div>
+    <div id="log"></div>
+  </section>
+
+  <footer>
+    目安：成人は1晩7時間以上の睡眠が推奨されています（米国睡眠医学会・CDC）。「睡眠負債」は直近7日の各日について、目標に届かなかった分を足し合わせたものです。昼寝も記録すると、起床日の合計に含まれます。
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const DAY = 86400000, MIN = 60000;
+  const WD = ["日", "月", "火", "水", "木", "金", "土"];
+  const QUALITY = [[1, "最悪"], [2, "だるい"], [3, "ふつう"], [4, "すっきり"], [5, "最高"]];
+  const LS_KEY = "nemuricho.v1";
+
+  let entries = [];      // {id, bed, wake|null, quality|null, note}
+  let goalMin = 420;
+  let backend = null;    // {kind:"db"|"local", add, put, del, setGoal}
+
+  // ---------- formatting ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const hm = (ms) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const md = (ms) => { const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`; };
+  const durShort = (m) => `${Math.floor(m / 60)}:${pad(Math.round(m % 60))}`;
+  const durJa = (m) => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; return h ? (r ? `${h}時間${r}分` : `${h}時間`) : `${r}分`; };
+  const toLocalInput = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const fromLocalInput = (v) => { if (!v) return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; };
+  const dayKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const startOfDay = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const roundTo5 = (ms) => Math.round(ms / (5 * MIN)) * 5 * MIN;
+  const level = (m) => m >= goalMin ? "good" : m >= goalMin - 60 ? "warn" : "bad";
+  const levelText = { good: "十分", warn: "やや不足", bad: "不足" };
+
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 2200);
+  }
+
+  // ---------- derived data ----------
+  const closed = () => entries.filter((e) => e.wake && e.wake > e.bed);
+  const openEntry = () => entries.filter((e) => !e.wake).sort((a, b) => b.bed - a.bed)[0] || null;
+
+  function byWakeDay() {
+    const map = new Map();
+    for (const e of closed()) {
+      const k = dayKey(e.wake);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push(e);
+    }
+    return map;
+  }
+
+  // Minutes after 18:00 of the evening before (handles bedtimes across midnight).
+  const eveningMinutes = (ms) => { const d = new Date(ms); let m = d.getHours() * 60 + d.getMinutes() - 18 * 60; if (m < 0) m += 1440; return m; };
+  const clockFromEvening = (m) => { m = ((Math.round(m) + 18 * 60) % 1440 + 1440) % 1440; return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
+  const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  const sd = (a) => { const m = mean(a); return Math.sqrt(mean(a.map((x) => (x - m) ** 2))); };
+
+  // ---------- render ----------
+  function renderGoal() {
+    const sel = $("goal");
+    if (!sel.options.length) {
+      for (let m = 360; m <= 540; m += 30) sel.add(new Option(durJa(m), m));
+    }
+    sel.value = String(goalMin);
+  }
+
+  function renderVerdict() {
+    const el = $("verdict");
+    const today0 = startOfDay(Date.now());
+    const days = byWakeDay();
+    const rows = [];
+    for (let i = 0; i < 7; i++) {
+      const k = dayKey(today0 - i * DAY);
+      if (days.has(k)) rows.push(days.get(k));
+    }
+    if (!rows.length) {
+      el.innerHTML = `<p class="verdict-line">まだ直近7日の記録がありません。</p>
+        <p class="muted" style="margin:0">夜に「いまから寝る」、朝に「いま起きた」を押すだけで記録できます。過去の夜は下のフォームから日時を入れて追加してください。</p>`;
+      return;
+    }
+    const totals = rows.map((r) => r.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0));
+    const avg = mean(totals);
+    const met = totals.filter((m) => m >= goalMin).length;
+    const debt = totals.reduce((s, m) => s + Math.max(0, goalMin - m), 0);
+    // Main sleep of each day = longest entry; used for bedtime/wake regularity.
+    const mains = rows.map((r) => r.reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a)));
+    const beds = mains.map((e) => eveningMinutes(e.bed));
+    const wakes = mains.map((e) => eveningMinutes(e.wake));
+    const lv = level(avg);
+    const gap = goalMin - avg;
+    const line = lv === "good"
+      ? `平均 <span class="num">${durShort(avg)}</span>。目標の${durJa(goalMin)}に届いています。`
+      : `平均 <span class="num">${durShort(avg)}</span>。目標まで1晩あと${durJa(gap)}足りません。`;
+    el.innerHTML = `
+      <p class="verdict-line"><span class="chip ${lv}">${levelText[lv]}</span> ${line}</p>
+      <dl class="stats">
+        <div><dt>目標達成</dt><dd>${met}<small> / ${rows.length}日</small></dd></div>
+        <div><dt>睡眠負債</dt><dd>${debt ? durShort(debt) : "0:00"}</dd></div>
+        <div><dt>平均の就寝</dt><dd>${clockFromEvening(mean(beds))}<small>${rows.length > 1 ? ` ±${Math.round(sd(beds))}分` : ""}</small></dd></div>
+        <div><dt>平均の起床</dt><dd>${clockFromEvening(mean(wakes))}<small>${rows.length > 1 ? ` ±${Math.round(sd(wakes))}分` : ""}</small></dd></div>
+      </dl>
+      <p class="muted" style="margin:0;font-size:.82rem">記録のある${rows.length}日分で計算。± は就寝・起床時刻のばらつき（標準偏差）で、小さいほど生活リズムが安定しています。</p>`;
+  }
+
+  // Window: 18:00 the evening before → 14:00 on the wake day (20 h).
+  const SPAN = 20 * 60;
+  function renderTimeline() {
+    const el = $("timeline");
+    const today0 = startOfDay(Date.now());
+    const days = byWakeDay();
+    const open = openEntry();
+    const pct = (m) => Math.max(0, Math.min(100, (m / SPAN) * 100));
+    let html = "";
+    for (let i = 13; i >= 0; i--) {
+      const d0 = today0 - i * DAY;
+      const winStart = d0 - 6 * 3600000; // 18:00 previous day
+      const list = days.get(dayKey(d0)) || [];
+      const total = list.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
+      let bars = "";
+      for (const e of list) {
+        const a = (e.bed - winStart) / MIN, b = (e.wake - winStart) / MIN;
+        if (b <= 0 || a >= SPAN) continue;
+        bars += `<div class="tl-bar ${level(total)}" style="left:${pct(a)}%;width:${pct(b) - pct(a)}%" title="${hm(e.bed)}→${hm(e.wake)} ${durJa((e.wake - e.bed) / MIN)}"></div>`;
+      }
+      if (open && i === 0) {
+        const a = (open.bed - winStart) / MIN, b = (Date.now() - winStart) / MIN;
+        if (b > 0 && a < SPAN) bars += `<div class="tl-bar open" style="left:${pct(a)}%;width:${Math.max(0.5, pct(b) - pct(a))}%"></div>`;
+      }
+      const wd = new Date(d0).getDay();
+      html += `<div class="tl-row">
+        <span class="tl-date${wd === 0 || wd === 6 ? " we" : ""}">${md(d0)}</span>
+        <div class="tl-track">${gridLines()}${bars}</div>
+        <span class="tl-dur ${total ? "" : "muted"}">${total ? durShort(total) : "—"}</span></div>`;
+    }
+    const ticks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20].map((h) => `<span style="left:${pct(h * 60)}%">${(18 + h) % 24}</span>`).join("");
+    html += `<div class="tl-axis"><span></span><div class="tl-ticks">${ticks}</div><span class="tl-date">時</span></div>`;
+    el.innerHTML = `<div class="tl" role="img" aria-label="直近14日の睡眠時間帯">${html}</div>`;
+    function gridLines() { return [6, 12].map((h) => `<div class="tl-grid" style="left:${pct(h * 60)}%"></div>`).join(""); }
+  }
+
+  let pendingDelete = null;
+  function renderLog() {
+    const el = $("log");
+    const list = [...entries].sort((a, b) => b.bed - a.bed);
+    $("log-count").textContent = list.length ? `${list.length}件` : "";
+    if (!list.length) {
+      el.innerHTML = `<div class="empty">記録はここに新しい順で並びます。最初の1件は「いまから寝る」か、上のフォームで追加できます。</div>`;
+      return;
+    }
+    const q = Object.fromEntries(QUALITY);
+    el.innerHTML = `<div class="log-wrap"><table>
+      <thead><tr><th>起床日</th><th>就寝 → 起床</th><th>睡眠</th><th>気分</th><th>メモ</th><th></th></tr></thead>
+      <tbody>${list.map((e) => {
+        const dur = e.wake ? (e.wake - e.bed) / MIN : null;
+        const lv = dur == null ? "open" : level(dur);
+        const confirming = pendingDelete === e.id;
+        return `<tr>
+          <td class="t">${e.wake ? md(e.wake) : "—"}</td>
+          <td class="t">${md(e.bed).replace(/\(.\)/, "")} ${hm(e.bed)} → ${e.wake ? hm(e.wake) : "おやすみ中"}</td>
+          <td class="t"><span class="dot ${lv}"></span>${dur == null ? "—" : durShort(dur)}</td>
+          <td style="white-space:nowrap">${e.quality ? q[e.quality] : '<span class="muted">—</span>'}</td>
+          <td class="note">${esc(e.note || "")}</td>
+          <td class="ops">${confirming
+            ? `<button class="link danger" data-act="del-yes" data-id="${e.id}">削除する</button><button class="link" data-act="del-no">やめる</button>`
+            : `<button class="link" data-act="edit" data-id="${e.id}">編集</button><button class="link danger" data-act="del" data-id="${e.id}">削除</button>`}</td>
+        </tr>`;
+      }).join("")}</tbody></table></div>`;
+  }
+  const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function renderAsleep() {
+    const o = openEntry();
+    $("asleep").hidden = !o;
+    $("btn-sleep").disabled = !!o;
+    if (o) $("asleep-since").textContent = `${md(o.bed)} ${hm(o.bed)} から（${durJa((Date.now() - o.bed) / MIN)}経過）`;
+  }
+
+  function renderAll() { renderGoal(); renderAsleep(); renderVerdict(); renderTimeline(); renderLog(); }
+
+  // ---------- form ----------
+  function buildQuality() {
+    $("quality").innerHTML = `<input type="radio" name="q" id="q0" value="" checked><label for="q0">なし</label>` +
+      QUALITY.map(([v, t]) => `<input type="radio" name="q" id="q${v}" value="${v}"><label for="q${v}">${t}</label>`).join("");
+  }
+  function setDefaults() {
+    const now = Date.now(), h = new Date(now).getHours();
+    let bed, wake;
+    if (h < 15) { wake = roundTo5(now); bed = wake - 7.5 * 3600000; }
+    else { const d = new Date(now); d.setHours(23, 0, 0, 0); bed = d.getTime(); wake = bed + 8 * 3600000; }
+    $("bed").value = toLocalInput(roundTo5(bed));
+    $("wake").value = toLocalInput(wake);
+    $("note").value = ""; $("q0").checked = true; $("edit-id").value = "";
+    $("btn-cancel").hidden = true; $("btn-save").textContent = "記録を保存";
+    updatePreview();
+  }
+  function readForm() {
+    const bed = fromLocalInput($("bed").value), wake = fromLocalInput($("wake").value);
+    const qv = document.querySelector('input[name="q"]:checked')?.value;
+    return { bed, wake, quality: qv ? Number(qv) : null, note: $("note").value.trim() };
+  }
+  function validate(f) {
+    if (!f.bed) return "寝た時刻を入れてください。";
+    if (f.wake == null) return null;
+    if (f.wake <= f.bed) return "起きた時刻が寝た時刻より前になっています。日付を確認してください。";
+    if (f.wake - f.bed > 20 * 3600000) return "20時間を超えています。日付を確認してください。";
+    return null;
+  }
+  function updatePreview() {
+    const f = readForm(), err = validate(f), p = $("preview");
+    p.classList.toggle("err", !!err);
+    if (err) { p.textContent = err; return; }
+    if (!f.wake) { p.textContent = "起きた時刻を空にすると「おやすみ中」として保存されます。"; return; }
+    const m = (f.wake - f.bed) / MIN, lv = level(m);
+    p.innerHTML = `睡眠 <span class="num">${durShort(m)}</span>（${durJa(m)}） — <span class="chip ${lv}">${levelText[lv]}</span>`;
+  }
+  ["bed", "wake"].forEach((id) => $(id).addEventListener("input", updatePreview));
+
+  $("form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = readForm(), err = validate(f);
+    if (err) { updatePreview(); return; }
+    const id = $("edit-id").value;
+    const data = { bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note };
+    try {
+      if (id) await backend.put(id, data); else await backend.add(data);
+      toast(id ? "記録を更新しました" : "記録を保存しました");
+      setDefaults();
+    } catch (e) { toast("保存できませんでした：" + (e?.message || e?.code || "不明なエラー")); }
+  });
+  $("btn-cancel").addEventListener("click", setDefaults);
+
+  $("btn-sleep").addEventListener("click", async () => {
+    try { await backend.add({ bed: roundTo5(Date.now()), wake: null, quality: null, note: "" }); toast("おやすみなさい。起きたら「いま起きた」を押してください"); }
+    catch (e) { toast("保存できませんでした"); }
+  });
+  $("btn-wake").addEventListener("click", async () => {
+    const o = openEntry(); if (!o) return;
+    const now = roundTo5(Date.now());
+    if (now - o.bed > 20 * 3600000) { startEdit(o.id); toast("20時間を超えています。時刻を直して保存してください"); return; }
+    try { await backend.put(o.id, { ...stripId(o), wake: Math.max(now, o.bed + 5 * MIN) }); toast("おはようございます。記録しました"); }
+    catch (e) { toast("保存できませんでした"); }
+  });
+  const stripId = ({ id, ...rest }) => rest;
+
+  function startEdit(id) {
+    const e = entries.find((x) => x.id === id); if (!e) return;
+    $("edit-id").value = id;
+    $("bed").value = toLocalInput(e.bed);
+    $("wake").value = e.wake ? toLocalInput(e.wake) : (e.bed < Date.now() - 20 * 3600000 ? "" : toLocalInput(roundTo5(Date.now())));
+    $("note").value = e.note || "";
+    ($("q" + (e.quality || 0)) || $("q0")).checked = true;
+    $("btn-cancel").hidden = false; $("btn-save").textContent = "変更を保存";
+    updatePreview();
+    $("form").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("bed").focus({ preventScroll: true });
+  }
+
+  $("log").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("button[data-act]"); if (!b) return;
+    const { act, id } = b.dataset;
+    if (act === "edit") startEdit(id);
+    else if (act === "del") { pendingDelete = id; renderLog(); }
+    else if (act === "del-no") { pendingDelete = null; renderLog(); }
+    else if (act === "del-yes") {
+      pendingDelete = null;
+      try { await backend.del(id); toast("削除しました"); } catch (e) { toast("削除できませんでした"); renderLog(); }
+    }
+  });
+
+  $("goal").addEventListener("change", async () => {
+    goalMin = Number($("goal").value);
+    renderAll(); updatePreview();
+    try { await backend.setGoal(goalMin); } catch (e) { toast("目標を保存できませんでした"); }
+  });
+
+  // ---------- storage ----------
+  const normalize = (id, d) => ({
+    id, bed: Number(d.bed), wake: d.wake == null ? null : Number(d.wake),
+    quality: d.quality == null ? null : Number(d.quality), note: typeof d.note === "string" ? d.note : "",
+  });
+
+  function useLocal(reason) {
+    let state = { entries: [], goalMin: 420 };
+    try { const raw = localStorage.getItem(LS_KEY); if (raw) state = JSON.parse(raw); } catch (e) {}
+    const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
+    const sync = () => { entries = state.entries.map((e) => normalize(e.id, e)); goalMin = state.goalMin || 420; renderAll(); };
+    backend = {
+      kind: "local",
+      add: async (d) => { state.entries.push({ id: "l" + Date.now().toString(36), ...d }); save(); sync(); },
+      put: async (id, d) => { state.entries = state.entries.map((e) => (e.id === id ? { id, ...d } : e)); save(); sync(); },
+      del: async (id) => { state.entries = state.entries.filter((e) => e.id !== id); save(); sync(); },
+      setGoal: async (m) => { state.goalMin = m; save(); },
+    };
+    $("status").textContent = reason;
+    sync();
+  }
+
+  async function init() {
+    buildQuality(); setDefaults(); renderAll();
+    let db = null;
+    try { db = window.claude?.use ? await window.claude.use("db") : null; } catch (e) { db = null; }
+    if (!db) { useLocal("このブラウザ内にだけ保存中"); return; }
+    const col = db.collection("sleep");
+    const settings = db.doc("settings/main");
+    const timer = setTimeout(() => { $("status").textContent = "接続に時間がかかっています…"; }, 10000);
+    backend = {
+      kind: "db",
+      add: (d) => col.add(d),
+      put: (id, d) => col.doc(id).set(d),
+      del: (id) => col.doc(id).delete(),
+      setGoal: (m) => settings.set({ goalMin: m }),
+    };
+    col.onSnapshot((snap) => {
+      clearTimeout(timer);
+      entries = snap.docs.map((d) => normalize(d.id, d.data())).filter((e) => !isNaN(e.bed));
+      $("status").textContent = "保存済み · 同期中";
+      renderAll();
+    }, (err) => { clearTimeout(timer); $("status").textContent = "読み込めませんでした（" + err.code + "）。ページを開き直してください"; });
+    settings.onSnapshot((s) => {
+      const g = s.exists ? Number(s.data().goalMin) : NaN;
+      if (g >= 240 && g <= 720) { goalMin = g; renderAll(); updatePreview(); }
+    }, () => {});
+  }
+
+  setInterval(renderAsleep, 60000);
+  init();
+})();
+</script>
