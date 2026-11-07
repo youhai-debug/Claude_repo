@@ -153,6 +153,10 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 .chip-toggle { padding: 6px 14px; font-size: .85rem; border-radius: 999px; }
 .chip-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .done-line .eyebrow { margin-right: 6px; }
+.add-chip { padding: 4px 12px; font-size: .82rem; border-radius: 999px; border-style: dashed; color: var(--accent); }
+.addrow { display: flex; gap: 8px; }
+.addrow input { flex: 1; }
+.today .field textarea { min-height: 52px; }
 .src { font-size: .7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) { .tl-bar { transition: left .3s, width .3s; } }
 </style>
@@ -229,7 +233,9 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 
   let entries = [];      // {id, bed, wake|null, quality|null, note}
   let goalMin = 420;
-  let backend = null;    // {kind:"db"|"local", add, put, del, setGoal}
+  let customTags = [];   // user-added choices, kept in settings
+  const allTags = () => [...TAGS, ...customTags.filter((t) => !TAGS.includes(t))];
+  let backend = null;    // {kind:"db"|"local", add, put, del, setSettings}
 
   // ---------- formatting ----------
   const pad = (n) => String(n).padStart(2, "0");
@@ -379,7 +385,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
           <td class="t">${known(e) ? `${md(e.bed).replace(/\(.\)/, "")} ${hm(e.bed)}` : "不明"} → ${e.wake ? hm(e.wake) : "おやすみ中"}</td>
           <td class="t"><span class="dot ${lv}"></span>${dur == null ? "—" : durShort(dur)}</td>
           <td style="white-space:nowrap">${e.quality ? q[e.quality] : '<span class="muted">—</span>'}</td>
-          <td class="note">${esc(e.note || "")}${e.src === "usual" ? '<span class="src">いつも通り</span>' : ""}</td>
+          <td class="note">${[...(e.tags || []), e.note].filter(Boolean).map(esc).join("、")}${e.src === "usual" ? '<span class="src">いつも通り</span>' : ""}</td>
           <td class="ops">${confirming
             ? `<button class="link danger" data-act="del-yes" data-id="${e.id}">削除する</button><button class="link" data-act="del-no">やめる</button>`
             : `<button class="link" data-act="edit" data-id="${e.id}">編集</button><button class="link danger" data-act="del" data-id="${e.id}">削除</button>`}</td>
@@ -435,6 +441,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 
   function renderToday() {
     const el = $("today");
+    const a = document.activeElement;
+    if (a && el.contains(a) && (a.id === "f-note" || a.id === "new-tag")) return; // re-render after typing ends
     const o = openEntry(), now = Date.now(), u = usual();
 
     // 1) Asleep: one tap to wake, with optional tags.
@@ -484,7 +492,13 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <p class="done-line">${kn ? hm(fresh.bed) : "不明"} → ${hm(fresh.wake)} <span class="muted" style="font-size:1rem">${kn ? durJa(dur) : ""}</span></p>
         <p class="sub">記録しました。よければ目覚めの気分と、当てはまるものをタップ（押すたびに保存・あとからでも変えられます）。</p>
         <div class="tags" role="group" aria-label="目覚めの気分">${QUALITY.map(([v, t]) => `<button type="button" data-act="fq" data-id="${fresh.id}" data-v="${v}" aria-pressed="${fresh.quality === v}">${t}</button>`).join("")}</div>
-        <div class="tags" role="group" aria-label="当てはまるもの">${TAGS.map((t) => `<button type="button" data-act="ftag" data-id="${fresh.id}" data-tag="${t}" aria-pressed="${noteTags(fresh.note).includes(t)}">${t}</button>`).join("")}</div>
+        <div class="tags" role="group" aria-label="当てはまるもの">${allTags().map((t) => `<button type="button" data-act="ftag" data-id="${fresh.id}" data-tag="${esc(t)}" aria-pressed="${fresh.tags.includes(t)}">${esc(t)}</button>`).join("")}
+          <button type="button" class="add-chip" data-act="tag-open" aria-expanded="${!!ui.adding}">＋ 自分で追加</button></div>
+        ${ui.adding ? `<div class="addrow"><input id="new-tag" maxlength="12" placeholder="例：残業、運動した、頭痛" aria-label="追加する項目">
+            <button type="button" class="primary" data-act="tag-add" data-id="${fresh.id}">追加</button></div>
+          ${customTags.length ? `<p class="sub">追加した項目（押すと選択肢から消えます。過去の記録には残ります）：${customTags.map((t) => `<button type="button" class="link danger" data-act="tag-remove" data-tag="${esc(t)}">${esc(t)} ×</button>`).join("")}</p>` : ""}` : ""}
+        <div class="field"><label for="f-note">メモ（選択肢にないことは自由に。入力欄から離れると保存）</label>
+          <textarea id="f-note" rows="2" maxlength="300" data-id="${fresh.id}" placeholder="例：寝る直前までスマホ、夢を見た">${esc(fresh.note)}</textarea></div>
         <div class="center"><button type="button" class="link" data-act="fclose" data-id="${fresh.id}">閉じる</button>
           <button type="button" class="link" data-act="edit-main" data-id="${fresh.id}">時刻を修正</button></div>`;
       return;
@@ -550,15 +564,44 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     }
     else if (act === "fq" || act === "ftag") {
       const e = entries.find((x) => x.id === b.dataset.id); if (!e) return;
-      let { quality, note } = e;
+      let { quality, tags } = e;
       if (act === "fq") { const v = Number(b.dataset.v); quality = quality === v ? null : v; }
-      else { const parts = noteTags(note), t = b.dataset.tag; note = (parts.includes(t) ? parts.filter((x) => x !== t) : [...parts, t]).join("、"); }
+      else { const t = b.dataset.tag; tags = tags.includes(t) ? tags.filter((x) => x !== t) : [...tags, t]; }
       b.disabled = true;
-      try { await backend.put(e.id, { ...stripId(e), quality, note }); } catch (err) { toast("保存できませんでした"); }
+      try { await backend.put(e.id, { ...stripId(e), quality, tags }); } catch (err) { toast("保存できませんでした"); }
       b.disabled = false;
+    }
+    else if (act === "tag-open") { ui.adding = !ui.adding; renderToday(); if (ui.adding) $("new-tag")?.focus(); }
+    else if (act === "tag-add") addCustomTag(b.dataset.id);
+    else if (act === "tag-remove") {
+      customTags = customTags.filter((x) => x !== b.dataset.tag); renderToday();
+      try { await backend.setSettings(); } catch (err) { toast("保存できませんでした"); }
     }
     else if (act === "fclose") { (ui.followClosed ||= new Set()).add(b.dataset.id); renderToday(); }
     else if (act === "edit-main") startEdit(b.dataset.id);
+  });
+
+  async function addCustomTag(id) {
+    const inp = $("new-tag"); const t = (inp?.value || "").replace(/[、,]/g, " ").trim();
+    if (!t) { inp?.focus(); return; }
+    if (!allTags().includes(t)) customTags = [...customTags, t];
+    ui.adding = false;
+    const e = entries.find((x) => x.id === id);
+    try {
+      await backend.setSettings();
+      if (e && !e.tags.includes(t)) await backend.put(e.id, { ...stripId(e), tags: [...e.tags, t] });
+      toast(`「${t}」を追加しました`);
+    } catch (err) { toast("保存できませんでした"); }
+    renderToday();
+  }
+  $("today").addEventListener("keydown", (ev) => {
+    if (ev.target.id === "new-tag" && ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); addCustomTag(document.querySelector('[data-act="tag-add"]')?.dataset.id); }
+  });
+  $("today").addEventListener("change", async (ev) => {
+    if (ev.target.id !== "f-note") return;
+    const e = entries.find((x) => x.id === ev.target.dataset.id); if (!e) return;
+    const note = ev.target.value.trim(); if (note === e.note) return;
+    try { await backend.put(e.id, { ...stripId(e), note }); toast("メモを保存しました"); } catch (err) { toast("メモを保存できませんでした"); }
   });
 
   function renderAll() { renderGoal(); renderToday(); renderVerdict(); renderTimeline(); renderLog(); }
@@ -607,7 +650,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     const f = readForm(), err = validate(f);
     if (err) { updatePreview(); return; }
     const id = $("edit-id").value;
-    const data = { bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note };
+    const prev = id ? entries.find((x) => x.id === id) : null;
+    const data = { ...(prev ? stripId(prev) : { tags: [] }), bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note, bedUnknown: false };
     try {
       if (id) await backend.put(id, data); else await backend.add(data);
       toast(id ? "記録を更新しました" : "記録を保存しました");
@@ -646,13 +690,19 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   $("goal").addEventListener("change", async () => {
     goalMin = Number($("goal").value);
     renderAll(); updatePreview();
-    try { await backend.setGoal(goalMin); } catch (e) { toast("目標を保存できませんでした"); }
+    try { await backend.setSettings(); } catch (e) { toast("目標を保存できませんでした"); }
   });
 
   // ---------- storage ----------
   const normalize = (id, d) => ({
     id, bed: Number(d.bed), wake: d.wake == null ? null : Number(d.wake),
-    quality: d.quality == null ? null : Number(d.quality), note: typeof d.note === "string" ? d.note : "",
+    quality: d.quality == null ? null : Number(d.quality),
+    ...(() => {
+      const note = typeof d.note === "string" ? d.note : "";
+      if (Array.isArray(d.tags)) return { tags: d.tags.filter((t) => typeof t === "string"), note };
+      const parts = noteTags(note);
+      return { tags: parts.filter((t) => TAGS.includes(t)), note: parts.filter((t) => !TAGS.includes(t)).join("、") };
+    })(),
     src: typeof d.src === "string" ? d.src : "manual", bedUnknown: d.bedUnknown === true,
   });
 
@@ -660,13 +710,13 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     let state = { entries: [], goalMin: 420 };
     try { const raw = localStorage.getItem(LS_KEY); if (raw) state = JSON.parse(raw); } catch (e) {}
     const save = () => { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} };
-    const sync = () => { entries = state.entries.map((e) => normalize(e.id, e)); goalMin = state.goalMin || 420; renderAll(); };
+    const sync = () => { entries = state.entries.map((e) => normalize(e.id, e)); goalMin = state.goalMin || 420; customTags = Array.isArray(state.customTags) ? state.customTags : []; renderAll(); };
     backend = {
       kind: "local",
       add: async (d) => { state.entries.push({ id: "l" + Date.now().toString(36), ...d }); save(); sync(); },
       put: async (id, d) => { state.entries = state.entries.map((e) => (e.id === id ? { id, ...d } : e)); save(); sync(); },
       del: async (id) => { state.entries = state.entries.filter((e) => e.id !== id); save(); sync(); },
-      setGoal: async (m) => { state.goalMin = m; save(); },
+      setSettings: async () => { state.goalMin = goalMin; state.customTags = customTags; save(); },
     };
     $("status").textContent = reason;
     sync();
@@ -685,7 +735,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       add: (d) => col.add(d),
       put: (id, d) => col.doc(id).set(d),
       del: (id) => col.doc(id).delete(),
-      setGoal: (m) => settings.set({ goalMin: m }),
+      setSettings: () => settings.set({ goalMin, customTags }),
     };
     col.onSnapshot((snap) => {
       clearTimeout(timer);
@@ -694,8 +744,10 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       renderAll();
     }, (err) => { clearTimeout(timer); $("status").textContent = "読み込めませんでした（" + err.code + "）。ページを開き直してください"; });
     settings.onSnapshot((s) => {
-      const g = s.exists ? Number(s.data().goalMin) : NaN;
-      if (g >= 300 && g <= 540) { goalMin = g; renderAll(); updatePreview(); }
+      const d = s.exists ? s.data() : {}, g = Number(d.goalMin);
+      if (g >= 300 && g <= 540) goalMin = g;
+      if (Array.isArray(d.customTags)) customTags = d.customTags.filter((t) => typeof t === "string").slice(0, 30);
+      renderAll(); updatePreview();
     }, () => {});
   }
 
