@@ -248,7 +248,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   function renderGoal() {
     const sel = $("goal");
     if (!sel.options.length) {
-      for (let m = 360; m <= 540; m += 30) sel.add(new Option(durJa(m), m));
+      for (let m = 300; m <= 540; m += 30) sel.add(new Option(durJa(m), m));
     }
     sel.value = String(goalMin);
   }
@@ -507,7 +507,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     }, (err) => { clearTimeout(timer); $("status").textContent = "読み込めませんでした（" + err.code + "）。ページを開き直してください"; });
     settings.onSnapshot((s) => {
       const g = s.exists ? Number(s.data().goalMin) : NaN;
-      if (g >= 240 && g <= 720) { goalMin = g; renderAll(); updatePreview(); }
+      if (g >= 300 && g <= 540) { goalMin = g; renderAll(); updatePreview(); }
     }, () => {});
   }
 
