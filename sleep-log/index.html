@@ -153,6 +153,9 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 .chip-toggle { padding: 6px 14px; font-size: .85rem; border-radius: 999px; }
 .chip-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .done-line .eyebrow { margin-right: 6px; }
+.tag-group { display: flex; flex-direction: column; gap: 4px; }
+.tag-group .label { font-size: .75rem; }
+.tags.left { justify-content: flex-start; }
 .add-chip { padding: 4px 12px; font-size: .82rem; border-radius: 999px; border-style: dashed; color: var(--accent); }
 .addrow { display: flex; gap: 8px; }
 .addrow input { flex: 1; }
@@ -203,7 +206,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <span class="label" id="q-label">目覚めの気分</span>
         <div class="quality" role="radiogroup" aria-labelledby="q-label" id="quality"></div>
       </div>
-      <div class="field wide"><label for="note">メモ（カフェイン、夜更かしの理由、昼寝など）</label><textarea id="note" rows="2" maxlength="300"></textarea></div>
+      <div class="field wide" id="form-tags"></div>
+      <div class="field wide"><label for="note">メモ（選択肢にないこと、量や時刻など）</label><textarea id="note" rows="2" maxlength="300"></textarea></div>
       <div class="preview" id="preview" aria-live="polite"></div>
       <div class="actions">
         <button type="submit" class="primary" id="btn-save">記録を保存</button>
@@ -395,7 +399,14 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ---------- quick card: いまから寝る / いま起きた ----------
-  const TAGS = ["朝帰り", "お酒", "夜中に起きた", "寝つけなかった"];
+  // Things before bed that affect sleep. Clock cut-offs assume a bedtime around 0:00:
+  // caffeine 8 h before, alcohol / big meal 3 h, hard exercise 2 h, screens 1 h, naps after 15:00.
+  const BEFORE = ["16時以降カフェイン", "21時以降お酒", "21時以降の食事", "22時以降の激しい運動", "23時以降スマホ・画面",
+    "15時以降の昼寝", "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
+  // What the night itself was like.
+  const NIGHT = ["朝帰り", "寝つけなかった", "夜中に起きた", "暑い・寒い", "物音・明るさ"];
+  const TAGS = [...BEFORE, ...NIGHT];
+  const LEGACY_TAGS = [...TAGS, "お酒"];
   const median = (a) => { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   const r5 = (m) => Math.round(m / 5) * 5;
   const anchorOf = (d0) => d0 - 6 * 3600000; // 18:00 the evening before
@@ -492,7 +503,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <p class="done-line">${kn ? hm(fresh.bed) : "不明"} → ${hm(fresh.wake)} <span class="muted" style="font-size:1rem">${kn ? durJa(dur) : ""}</span></p>
         <p class="sub">記録しました。よければ目覚めの気分と、当てはまるものをタップ（押すたびに保存・あとからでも変えられます）。</p>
         <div class="tags" role="group" aria-label="目覚めの気分">${QUALITY.map(([v, t]) => `<button type="button" data-act="fq" data-id="${fresh.id}" data-v="${v}" aria-pressed="${fresh.quality === v}">${t}</button>`).join("")}</div>
-        <div class="tags" role="group" aria-label="当てはまるもの">${allTags().map((t) => `<button type="button" data-act="ftag" data-id="${fresh.id}" data-tag="${esc(t)}" aria-pressed="${fresh.tags.includes(t)}">${esc(t)}</button>`).join("")}
+        ${tagGroups(fresh.tags, "ftag", fresh.id)}
+        <div class="tags">
           <button type="button" class="add-chip" data-act="tag-open" aria-expanded="${!!ui.adding}">＋ 自分で追加</button></div>
         ${ui.adding ? `<div class="addrow"><input id="new-tag" maxlength="12" placeholder="例：残業、運動した、頭痛" aria-label="追加する項目">
             <button type="button" class="primary" data-act="tag-add" data-id="${fresh.id}">追加</button></div>
@@ -581,6 +593,15 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     else if (act === "edit-main") startEdit(b.dataset.id);
   });
 
+  // Chips in two groups: before bed (built-in + user-added) and during the night.
+  function tagGroups(selected, act, id) {
+    const chip = (t) => `<button type="button" data-act="${act}" ${id ? `data-id="${id}"` : ""} data-tag="${esc(t)}" aria-pressed="${selected.includes(t)}">${esc(t)}</button>`;
+    const before = [...BEFORE, ...customTags.filter((t) => !TAGS.includes(t))];
+    const extra = selected.filter((t) => !before.includes(t) && !NIGHT.includes(t)); // older or removed choices still on this record
+    return `<div class="tag-group"><span class="label">寝る前</span><div class="tags left" role="group" aria-label="寝る前">${[...before, ...extra].map(chip).join("")}</div></div>
+      <div class="tag-group"><span class="label">夜のようす</span><div class="tags left" role="group" aria-label="夜のようす">${NIGHT.map(chip).join("")}</div></div>`;
+  }
+
   async function addCustomTag(id) {
     const inp = $("new-tag"); const t = (inp?.value || "").replace(/[、,]/g, " ").trim();
     if (!t) { inp?.focus(); return; }
@@ -604,7 +625,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     try { await backend.put(e.id, { ...stripId(e), note }); toast("メモを保存しました"); } catch (err) { toast("メモを保存できませんでした"); }
   });
 
-  function renderAll() { renderGoal(); renderToday(); renderVerdict(); renderTimeline(); renderLog(); }
+  function renderAll() { renderFormTags(); renderGoal(); renderToday(); renderVerdict(); renderTimeline(); renderLog(); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) renderAll(); });
 
   // ---------- form ----------
@@ -612,6 +633,12 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     $("quality").innerHTML = `<input type="radio" name="q" id="q0" value="" checked><label for="q0">なし</label>` +
       QUALITY.map(([v, t]) => `<input type="radio" name="q" id="q${v}" value="${v}"><label for="q${v}">${t}</label>`).join("");
   }
+  let formTags = [];
+  const renderFormTags = () => { $("form-tags").innerHTML = tagGroups(formTags, "formtag"); };
+  $("form-tags").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-act=formtag]"); if (!b) return;
+    const t = b.dataset.tag; formTags = formTags.includes(t) ? formTags.filter((x) => x !== t) : [...formTags, t]; renderFormTags();
+  });
   function setDefaults() {
     const now = Date.now(), h = new Date(now).getHours();
     let bed, wake;
@@ -619,7 +646,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     else { const d = new Date(now); d.setHours(23, 0, 0, 0); bed = d.getTime(); wake = bed + 8 * 3600000; }
     $("bed").value = toLocalInput(roundTo5(bed));
     $("wake").value = toLocalInput(wake);
-    $("note").value = ""; $("q0").checked = true; $("edit-id").value = "";
+    $("note").value = ""; $("q0").checked = true; $("edit-id").value = ""; formTags = []; renderFormTags();
     $("btn-cancel").hidden = true; $("btn-save").textContent = "記録を保存";
     updatePreview();
   }
@@ -651,7 +678,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     if (err) { updatePreview(); return; }
     const id = $("edit-id").value;
     const prev = id ? entries.find((x) => x.id === id) : null;
-    const data = { ...(prev ? stripId(prev) : { tags: [] }), bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note, bedUnknown: false };
+    const data = { ...(prev ? stripId(prev) : { tags: [] }), bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note, tags: [...formTags], bedUnknown: false };
     try {
       if (id) await backend.put(id, data); else await backend.add(data);
       toast(id ? "記録を更新しました" : "記録を保存しました");
@@ -667,7 +694,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     $("edit-id").value = id;
     $("bed").value = toLocalInput(e.bed);
     $("wake").value = e.wake ? toLocalInput(e.wake) : (e.bed < Date.now() - 20 * 3600000 ? "" : toLocalInput(roundTo5(Date.now())));
-    $("note").value = e.note || "";
+    $("note").value = e.note || ""; formTags = [...e.tags]; renderFormTags();
     ($("q" + (e.quality || 0)) || $("q0")).checked = true;
     $("btn-cancel").hidden = false; $("btn-save").textContent = "変更を保存";
     updatePreview();
@@ -701,7 +728,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       const note = typeof d.note === "string" ? d.note : "";
       if (Array.isArray(d.tags)) return { tags: d.tags.filter((t) => typeof t === "string"), note };
       const parts = noteTags(note);
-      return { tags: parts.filter((t) => TAGS.includes(t)), note: parts.filter((t) => !TAGS.includes(t)).join("、") };
+      return { tags: parts.filter((t) => LEGACY_TAGS.includes(t)), note: parts.filter((t) => !LEGACY_TAGS.includes(t)).join("、") };
     })(),
     src: typeof d.src === "string" ? d.src : "manual", bedUnknown: d.bedUnknown === true,
   });
