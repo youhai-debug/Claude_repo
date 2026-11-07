@@ -60,8 +60,6 @@ header.top { display: flex; align-items: flex-end; justify-content: space-betwee
 @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Asleep banner */
-.asleep { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: var(--moon-soft); border-radius: 6px; padding: 14px 16px; }
-.asleep strong { font-family: var(--f-display); font-size: 1.05rem; }
 
 /* Timeline */
 .tl { display: flex; flex-direction: column; gap: 4px; }
@@ -140,12 +138,21 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 .tags button { padding: 4px 12px; font-size: .82rem; border-radius: 999px; }
 .tags button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .big { width: 100%; padding: 14px; font-size: 1.05rem; }
-.done-line { font-family: var(--f-data); font-size: 1.5rem; font-variant-numeric: tabular-nums; margin: 0; }
+.done-line { font-family: var(--f-data); font-size: 1.2rem; white-space: nowrap; overflow-x: auto; font-variant-numeric: tabular-nums; margin: 0; }
 .done-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .missing { display: flex; flex-direction: column; gap: 0; border-top: 1px dashed var(--line); padding-top: 10px; }
 .missing-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); padding-bottom: 4px; }
 .miss-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .88rem; }
 .miss-row .t { font-family: var(--f-data); font-variant-numeric: tabular-nums; color: var(--muted); }
+.tl-bar.unk { background: var(--muted); }
+.dot.unk { background: var(--muted); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.two .big { padding: 18px 8px; }
+.times.one { grid-template-columns: minmax(0, 1fr); }
+.center { display: flex; justify-content: center; }
+.chip-toggle { padding: 6px 14px; font-size: .85rem; border-radius: 999px; }
+.chip-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.done-line .eyebrow { margin-right: 6px; }
 .src { font-size: .7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) { .tl-bar { transition: left .3s, width .3s; } }
 </style>
@@ -162,11 +169,6 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       <span class="status" id="status">読み込み中…</span>
     </div>
   </header>
-
-  <div class="asleep" id="asleep" hidden>
-    <div><strong>おやすみ中</strong> <span class="muted" id="asleep-since"></span></div>
-    <button class="moon" type="button" id="btn-wake">いま起きた</button>
-  </div>
 
   <div class="today" id="today" aria-live="polite"></div>
 
@@ -187,8 +189,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   </section>
 
   <section aria-labelledby="h-form">
-    <div class="sec-head"><h2 id="h-form">細かく記録する</h2>
-      <div class="quick"><button type="button" id="btn-sleep">いまから寝る</button></div>
+    <div class="sec-head"><h2 id="h-form">細かく記録する</h2><span class="eyebrow">過去の夜や昼寝はこちら</span>
     </div>
     <form id="form" novalidate>
       <input type="hidden" id="edit-id">
@@ -251,6 +252,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 
   // ---------- derived data ----------
   const closed = () => entries.filter((e) => e.wake && e.wake > e.bed);
+  const known = (e) => !e.bedUnknown;
   const openEntry = () => entries.filter((e) => !e.wake).sort((a, b) => b.bed - a.bed)[0] || null;
 
   function byWakeDay() {
@@ -282,10 +284,12 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     const el = $("verdict");
     const today0 = startOfDay(Date.now());
     const days = byWakeDay();
-    const rows = [];
+    const rows = []; let unknownDays = 0;
     for (let i = 0; i < 7; i++) {
       const k = dayKey(today0 - i * DAY);
-      if (days.has(k)) rows.push(days.get(k));
+      if (!days.has(k)) continue;
+      const kn = days.get(k).filter(known);
+      if (kn.length) rows.push(kn); else unknownDays++;
     }
     if (!rows.length) {
       el.innerHTML = `<p class="verdict-line">まだ直近7日の記録がありません。</p>
@@ -313,7 +317,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <div><dt>平均の就寝</dt><dd>${clockFromEvening(mean(beds))}<small>${rows.length > 1 ? ` ±${Math.round(sd(beds))}分` : ""}</small></dd></div>
         <div><dt>平均の起床</dt><dd>${clockFromEvening(mean(wakes))}<small>${rows.length > 1 ? ` ±${Math.round(sd(wakes))}分` : ""}</small></dd></div>
       </dl>
-      <p class="muted" style="margin:0;font-size:.82rem">記録のある${rows.length}日分で計算。± は就寝・起床時刻のばらつき（標準偏差）で、小さいほど生活リズムが安定しています。</p>`;
+      <p class="muted" style="margin:0;font-size:.82rem">記録のある${rows.length}日分で計算${unknownDays ? `（寝た時刻が不明な${unknownDays}日は除外）` : ""}。± は就寝・起床時刻のばらつき（標準偏差）で、小さいほど生活リズムが安定しています。</p>`;
   }
 
   // Window: 18:00 the evening before → 14:00 on the wake day (20 h).
@@ -329,9 +333,11 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       const d0 = today0 - i * DAY;
       const winStart = d0 - 6 * 3600000; // 18:00 previous day
       const list = days.get(dayKey(d0)) || [];
-      const total = list.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
+      const total = list.filter(known).reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
+      const onlyUnknown = list.length && !total;
       let bars = "";
       for (const e of list) {
+        if (!known(e)) { const w = (e.wake - winStart) / MIN; if (w > 0 && w < SPAN) bars += `<div class="tl-bar unk" style="left:${pct(w) - 1}%;width:1%" title="寝た時刻不明 → ${hm(e.wake)}"></div>`; continue; }
         const a = (e.bed - winStart) / MIN, b = (e.wake - winStart) / MIN;
         if (b <= 0 || a >= SPAN) continue;
         bars += `<div class="tl-bar ${level(total)}" style="left:${pct(a)}%;width:${pct(b) - pct(a)}%" title="${hm(e.bed)}→${hm(e.wake)} ${durJa((e.wake - e.bed) / MIN)}"></div>`;
@@ -344,7 +350,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       html += `<div class="tl-row">
         <span class="tl-date${wd === 0 || wd === 6 ? " we" : ""}">${md(d0)}</span>
         <div class="tl-track">${gridLines()}${bars}</div>
-        <span class="tl-dur ${total ? "" : "muted"}">${total ? durShort(total) : "—"}</span></div>`;
+        <span class="tl-dur ${total ? "" : "muted"}">${total ? durShort(total) : onlyUnknown ? "?" : "—"}</span></div>`;
     }
     const ticks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20].map((h) => `<span style="left:${pct(h * 60)}%">${(18 + h) % 24}</span>`).join("");
     html += `<div class="tl-axis"><span></span><div class="tl-ticks">${ticks}</div><span class="tl-date">時</span></div>`;
@@ -365,12 +371,12 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     el.innerHTML = `<div class="log-wrap"><table>
       <thead><tr><th>起床日</th><th>就寝 → 起床</th><th>睡眠</th><th>気分</th><th>メモ</th><th></th></tr></thead>
       <tbody>${list.map((e) => {
-        const dur = e.wake ? (e.wake - e.bed) / MIN : null;
-        const lv = dur == null ? "open" : level(dur);
+        const dur = e.wake && known(e) ? (e.wake - e.bed) / MIN : null;
+        const lv = !e.wake ? "open" : dur == null ? "unk" : level(dur);
         const confirming = pendingDelete === e.id;
         return `<tr>
           <td class="t">${e.wake ? md(e.wake) : "—"}</td>
-          <td class="t">${md(e.bed).replace(/\(.\)/, "")} ${hm(e.bed)} → ${e.wake ? hm(e.wake) : "おやすみ中"}</td>
+          <td class="t">${known(e) ? `${md(e.bed).replace(/\(.\)/, "")} ${hm(e.bed)}` : "不明"} → ${e.wake ? hm(e.wake) : "おやすみ中"}</td>
           <td class="t"><span class="dot ${lv}"></span>${dur == null ? "—" : durShort(dur)}</td>
           <td style="white-space:nowrap">${e.quality ? q[e.quality] : '<span class="muted">—</span>'}</td>
           <td class="note">${esc(e.note || "")}${e.src === "usual" ? '<span class="src">いつも通り</span>' : ""}</td>
@@ -382,29 +388,34 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   }
   const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  function renderAsleep() {
-    const o = openEntry();
-    $("asleep").hidden = !o;
-    $("btn-sleep").disabled = !!o;
-    if (o) $("asleep-since").textContent = `${md(o.bed)} ${hm(o.bed)} から（${durJa((Date.now() - o.bed) / MIN)}経過）`;
-  }
-
-  // ---------- morning one-tap ----------
+  // ---------- quick card: いまから寝る / いま起きた ----------
   const TAGS = ["朝帰り", "お酒", "夜中に起きた", "寝つけなかった"];
   const median = (a) => { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
   const r5 = (m) => Math.round(m / 5) * 5;
   const anchorOf = (d0) => d0 - 6 * 3600000; // 18:00 the evening before
-  // "Usual" night = median bedtime and wake time of the last 14 main sleeps.
+  const H = 3600000;
+  // "Usual" night = median bedtime and wake time of the last 14 main sleeps with a known bedtime.
   function usual() {
-    const recent = closed().filter((e) => e.wake - e.bed >= 3 * 3600000).sort((a, b) => b.wake - a.wake).slice(0, 14);
+    const recent = closed().filter((e) => known(e) && e.wake - e.bed >= 3 * H).sort((a, b) => b.wake - a.wake).slice(0, 14);
     if (!recent.length) return { bedM: 360, wakeM: 720, learned: false }; // 0:00 → 6:00 until there is data
     return { bedM: r5(median(recent.map((e) => eveningMinutes(e.bed)))), wakeM: r5(median(recent.map((e) => eveningMinutes(e.wake)))), learned: true };
   }
   const targetDay = () => { const t0 = startOfDay(Date.now()); return new Date().getHours() < 4 ? t0 - DAY : t0; };
   const hasNight = (d0) => byWakeDay().has(dayKey(d0));
   const nightLabel = (d0) => d0 === startOfDay(Date.now()) ? "ゆうべ" : `${md(d0)}の朝まで`;
+  const joinNote = (note, tags) => [note, ...tags].filter(Boolean).join("、");
+  // Best guess for when a sleep that ended at `wake` started: the usual bedtime before it.
+  function guessBed(wake) {
+    const u = usual();
+    let t = anchorOf(startOfDay(wake)) + u.bedM * MIN;
+    if (t > wake - H) t -= DAY;
+    if (wake - t > 20 * H || wake - t < H) t = wake - 6 * H;
+    return roundTo5(t);
+  }
 
-  let draft = null; // {day0, bedM, wakeM, base:{bedM,wakeM}, tags:Set}
+  let ui = { mode: null, tags: new Set() }; // mode: null | "ask-bed"
+  const resetUi = () => { ui = { mode: null, tags: new Set() }; };
+
   function missingNights() {
     const all = closed();
     if (!all.length) return [];
@@ -414,80 +425,122 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     return out;
   }
 
+  const tagsHtml = () => `<div class="tags" role="group" aria-label="ひとこと（任意・複数可）">${TAGS.map((t) =>
+    `<button type="button" data-act="tag" data-tag="${t}" aria-pressed="${ui.tags.has(t)}">${t}</button>`).join("")}</div>`;
+  const stepper = (label, key, val) => `<div class="stepper"><span class="label">${label}</span><div class="row">
+      <button type="button" data-act="step" data-key="${key}" data-d="-15" aria-label="${label}時刻を15分早く">−15</button>
+      <span class="val">${val}</span>
+      <button type="button" data-act="step" data-key="${key}" data-d="15" aria-label="${label}時刻を15分遅く">+15</button></div></div>`;
+
   function renderToday() {
     const el = $("today");
-    if (openEntry()) { el.hidden = true; return; }
-    el.hidden = false;
-    const d0 = targetDay(), u = usual();
-    const miss = missingNights();
-    const missHtml = miss.length ? `<div class="missing">
-        <div class="missing-head"><span>記録のない夜 ${miss.length}日（いつも通りなら1タップで埋まります）</span>
-          ${miss.length > 1 ? `<button type="button" class="link" data-act="fill-all">${miss.length}日分まとめて記録</button>` : ""}</div>
-        ${miss.map((d) => `<div class="miss-row"><span>${md(d)}の朝まで <span class="t">${clockFromEvening(u.bedM)}→${clockFromEvening(u.wakeM)}</span></span>
-          <button type="button" class="link" data-act="fill" data-day="${d}">いつも通り</button></div>`).join("")}
-      </div>` : "";
+    const o = openEntry(), now = Date.now(), u = usual();
 
-    if (hasNight(d0)) {
-      const list = byWakeDay().get(dayKey(d0));
-      const main = list.reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a));
-      const total = list.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
-      el.innerHTML = `<h2>${nightLabel(d0)}の睡眠 <span class="chip ${level(total)}">記録済み</span></h2>
-        <div class="done-row"><p class="done-line">${hm(main.bed)} → ${hm(main.wake)} <span class="muted" style="font-size:1rem">${durJa(total)}</span></p>
-          <button type="button" class="link" data-act="edit-main" data-id="${main.id}">修正する</button></div>
-        <p class="sub">次は明日の朝、ここを開いて1タップするだけです。</p>${missHtml}`;
+    // 1) Asleep: one tap to wake, with optional tags.
+    if (o) {
+      if (now - o.bed <= 20 * H) {
+        el.innerHTML = `<h2>おやすみ中</h2>
+          <p class="sub">${md(o.bed)} ${hm(o.bed)} から（${durJa((now - o.bed) / MIN)}経過）。当てはまるものがあればタップしてから「いま起きた」。</p>
+          ${tagsHtml()}
+          <button type="button" class="moon big" data-act="wake-now">いま起きた</button>
+          <div class="center"><button type="button" class="link danger" data-act="cancel-sleep">${ui.confirmCancel ? "本当に取り消す" : "「いまから寝る」を取り消す"}</button></div>`;
+      } else {
+        if (ui.lateFor !== o.id) { ui.lateFor = o.id; ui.wakeMs = Math.min(roundTo5(o.bed + Math.max(4 * 60, u.wakeM - u.bedM) * MIN), roundTo5(now)); }
+        el.innerHTML = `<h2>「いま起きた」が押されていません</h2>
+          <p class="sub">${md(o.bed)} ${hm(o.bed)} に寝た記録が残っています。起きた時刻を合わせて記録してください。</p>
+          <div class="times one">${stepper("起きた", "wakeMs", `${md(ui.wakeMs).replace(/\(.\)/, "")} ${hm(ui.wakeMs)}`)}</div>
+          <p class="dur">睡眠 <span class="num">${durShort((ui.wakeMs - o.bed) / MIN)}</span></p>
+          ${tagsHtml()}
+          <button type="button" class="primary big" data-act="save-late">この時刻で記録</button>
+          <div class="center"><button type="button" class="link danger" data-act="cancel-sleep">${ui.confirmCancel ? "本当に消す" : "この記録を消す"}</button></div>`;
+      }
       return;
     }
-    const untouched = draft && draft.bedM === draft.base.bedM && draft.wakeM === draft.base.wakeM && !draft.tags.size;
-    if (!draft || draft.day0 !== d0 || (untouched && (draft.base.bedM !== u.bedM || draft.base.wakeM !== u.wakeM))) draft = { day0: d0, bedM: u.bedM, wakeM: u.wakeM, base: { bedM: u.bedM, wakeM: u.wakeM }, tags: new Set() };
-    const dur = draft.wakeM - draft.bedM;
-    const changed = draft.bedM !== draft.base.bedM || draft.wakeM !== draft.base.wakeM;
-    el.innerHTML = `<h2>${nightLabel(d0)}は何時に寝た？</h2>
-      <p class="sub">${u.learned ? "これまでの記録から「いつも」の時刻を入れてあります。ずれていたら ± で直して押すだけ。" : "最初の数回は ± で時刻を合わせてください。記録がたまると、いつもの時刻が自動で入るようになります。"}</p>
-      <div class="times">
-        <div class="stepper"><span class="label">寝た</span><div class="row">
-          <button type="button" data-act="bed" data-d="-15" aria-label="寝た時刻を15分早く">−15</button>
-          <span class="val">${clockFromEvening(draft.bedM)}</span>
-          <button type="button" data-act="bed" data-d="15" aria-label="寝た時刻を15分遅く">+15</button></div></div>
-        <div class="stepper"><span class="label">起きた</span><div class="row">
-          <button type="button" data-act="wake" data-d="-15" aria-label="起きた時刻を15分早く">−15</button>
-          <span class="val">${clockFromEvening(draft.wakeM)}</span>
-          <button type="button" data-act="wake" data-d="15" aria-label="起きた時刻を15分遅く">+15</button></div></div>
-      </div>
-      <p class="dur">睡眠 <span class="num">${durShort(dur)}</span> <span class="chip ${level(dur)}">${levelText[level(dur)]}</span></p>
-      <div class="tags" role="group" aria-label="ひとこと（任意）">${TAGS.map((t) => `<button type="button" data-act="tag" data-tag="${t}" aria-pressed="${draft.tags.has(t)}">${t}</button>`).join("")}</div>
-      <button type="button" class="primary big" data-act="save-today">${changed ? "この時刻で記録" : "いつも通りで記録"}</button>${missHtml}`;
+
+    // 2) Woke up without having pressed いまから寝る: ask when they fell asleep.
+    if (ui.mode === "ask-bed") {
+      const dur = (ui.wakeMs - ui.bedMs) / MIN;
+      el.innerHTML = `<h2>おはようございます。何時に寝た？</h2>
+        <p class="sub">「いまから寝る」が押されていなかったので、寝た時刻だけ教えてください。いつもの時刻を入れてあります。分からなければ「分からない」でOKです。</p>
+        <div class="times">
+          ${ui.unknown ? `<div class="stepper"><span class="label">寝た</span><div class="row"><span class="val muted">不明</span></div></div>` : stepper("寝た", "bedMs", hm(ui.bedMs))}
+          ${stepper("起きた", "wakeMs", hm(ui.wakeMs))}
+        </div>
+        <div class="center"><button type="button" class="chip-toggle" data-act="toggle-unknown" aria-pressed="${!!ui.unknown}">いつ寝たか分からない</button></div>
+        <p class="dur">${ui.unknown ? '<span class="muted">睡眠時間は「不明」として記録し、平均の計算からは外します</span>' : `睡眠 <span class="num">${durShort(dur)}</span> <span class="chip ${level(dur)}">${levelText[level(dur)]}</span>`}</p>
+        ${tagsHtml()}
+        <button type="button" class="primary big" data-act="save-ask">記録する</button>
+        <div class="center"><button type="button" class="link" data-act="ask-cancel">やめる</button></div>`;
+      return;
+    }
+
+    // 3) Idle: two big buttons. Morning puts いま起きた first.
+    const d0 = targetDay(), hour = new Date(now).getHours(), morning = hour >= 4 && hour < 15;
+    const miss = missingNights();
+    let summary = "";
+    if (hasNight(d0)) {
+      const list = byWakeDay().get(dayKey(d0)), kn = list.filter(known);
+      const main = (kn.length ? kn : list).reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a));
+      const total = kn.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
+      summary = `<div class="done-row"><p class="done-line"><span class="eyebrow">${nightLabel(d0)}</span> ${known(main) ? hm(main.bed) : "不明"} → ${hm(main.wake)} <span class="muted" style="font-size:1rem">${kn.length ? durJa(total) : ""}</span></p>
+        <button type="button" class="link" data-act="edit-main" data-id="${main.id}">修正</button></div>`;
+    }
+    const sleepBtn = `<button type="button" class="moon big" data-act="sleep-now">いまから寝る</button>`;
+    const wakeBtn = `<button type="button" class="${morning && !hasNight(d0) ? "primary" : ""} big" data-act="wake-start">いま起きた</button>`;
+    el.innerHTML = `${summary}
+      <div class="two">${morning ? wakeBtn + sleepBtn : sleepBtn + wakeBtn}</div>
+      <p class="sub">寝る前に「いまから寝る」、起きたら「いま起きた」。寝る前に押し忘れても、朝に寝た時刻を聞くので大丈夫です。</p>
+      ${miss.length ? `<div class="missing">
+        <div class="missing-head"><span>記録のない夜 ${miss.length}日（いつも通り ${clockFromEvening(u.bedM)}→${clockFromEvening(u.wakeM)} で埋められます）</span>
+          ${miss.length > 1 ? `<button type="button" class="link" data-act="fill-all">${miss.length}日分まとめて記録</button>` : ""}</div>
+        ${miss.map((d) => `<div class="miss-row"><span>${md(d)}の朝まで</span><button type="button" class="link" data-act="fill" data-day="${d}">いつも通りで記録</button></div>`).join("")}
+      </div>` : ""}`;
   }
 
   async function addNight(d0, bedM, wakeM, note, src) {
     const a = anchorOf(d0);
     await backend.add({ bed: a + bedM * MIN, wake: a + wakeM * MIN, quality: null, note, src });
   }
+  async function run(btn, fn, okMsg) {
+    btn.disabled = true;
+    try { await fn(); resetUi(); toast(okMsg); renderToday(); }
+    catch (e) { btn.disabled = false; toast("保存できませんでした。もう一度押してください"); }
+  }
 
   $("today").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button[data-act]"); if (!b) return;
-    const act = b.dataset.act;
-    if (act === "bed" || act === "wake") {
-      const k = act + "M", next = draft[k] + Number(b.dataset.d);
-      const bed = act === "bed" ? next : draft.bedM, wake = act === "wake" ? next : draft.wakeM;
-      if (bed < 0 || wake > SPAN || wake - bed < 60) return;
-      draft[k] = next; renderToday();
-    } else if (act === "tag") {
-      const t = b.dataset.tag; draft.tags.has(t) ? draft.tags.delete(t) : draft.tags.add(t); renderToday();
-    } else if (act === "save-today") {
-      if (anchorOf(draft.day0) + draft.wakeM * MIN > Date.now() + 10 * MIN) { toast("起きた時刻がまだ来ていません。時刻を直してください"); return; }
-      const changed = draft.bedM !== draft.base.bedM || draft.wakeM !== draft.base.wakeM;
-      b.disabled = true;
-      try { await addNight(draft.day0, draft.bedM, draft.wakeM, [...draft.tags].join("、"), changed ? "quick" : "usual"); draft = null; toast("記録しました。また明日"); }
-      catch (e) { b.disabled = false; toast("保存できませんでした"); }
-    } else if (act === "fill" || act === "fill-all") {
+    const act = b.dataset.act, now = Date.now(), o = openEntry();
+    if (act === "tag") { const t = b.dataset.tag; ui.tags.has(t) ? ui.tags.delete(t) : ui.tags.add(t); renderToday(); }
+    else if (act === "sleep-now") run(b, () => backend.add({ bed: roundTo5(now), wake: null, quality: null, note: "", src: "live" }), "おやすみなさい。起きたら「いま起きた」を押してください");
+    else if (act === "wake-now" && o) run(b, () => backend.put(o.id, { ...stripId(o), wake: Math.max(roundTo5(now), o.bed + 5 * MIN), note: joinNote(o.note, ui.tags), src: "live" }), "おはようございます。記録しました");
+    else if (act === "save-late" && o) run(b, () => backend.put(o.id, { ...stripId(o), wake: ui.wakeMs, note: joinNote(o.note, ui.tags), src: "live" }), "記録しました");
+    else if (act === "cancel-sleep" && o) {
+      if (!ui.confirmCancel) { ui.confirmCancel = true; renderToday(); return; }
+      run(b, () => backend.del(o.id), "取り消しました");
+    }
+    else if (act === "wake-start") { const w = roundTo5(now); ui = { mode: "ask-bed", wakeMs: w, bedMs: guessBed(w), unknown: false, tags: new Set() }; renderToday(); }
+    else if (act === "ask-cancel") { resetUi(); renderToday(); }
+    else if (act === "toggle-unknown") { ui.unknown = !ui.unknown; renderToday(); }
+    else if (act === "step") {
+      const key = b.dataset.key, next = ui[key] + Number(b.dataset.d) * MIN;
+      const bed = o ? o.bed : (key === "bedMs" ? next : ui.bedMs), wake = key === "wakeMs" ? next : ui.wakeMs;
+      if (wake > now + 5 * MIN || wake - bed < H || wake - bed > 20 * H) return;
+      ui[key] = next; renderToday();
+    }
+    else if (act === "save-ask") {
+      const data = ui.unknown
+        ? { bed: guessBed(ui.wakeMs), bedUnknown: true }
+        : { bed: ui.bedMs };
+      run(b, () => backend.add({ ...data, wake: ui.wakeMs, quality: null, note: joinNote("", ui.tags), src: "wake-only" }), "おはようございます。記録しました");
+    }
+    else if (act === "fill" || act === "fill-all") {
       const u = usual(), days = act === "fill" ? [Number(b.dataset.day)] : missingNights();
-      b.disabled = true;
-      try { for (const d of days) await addNight(d, u.bedM, u.wakeM, "", "usual"); toast(`${days.length}日分を記録しました`); }
-      catch (e) { b.disabled = false; toast("保存できませんでした"); }
-    } else if (act === "edit-main") startEdit(b.dataset.id);
+      run(b, async () => { for (const d of days) await addNight(d, u.bedM, u.wakeM, "", "usual"); }, `${days.length}日分を記録しました`);
+    }
+    else if (act === "edit-main") startEdit(b.dataset.id);
   });
 
-  function renderAll() { renderGoal(); renderAsleep(); renderToday(); renderVerdict(); renderTimeline(); renderLog(); }
+  function renderAll() { renderGoal(); renderToday(); renderVerdict(); renderTimeline(); renderLog(); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) renderAll(); });
 
   // ---------- form ----------
@@ -542,17 +595,6 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   });
   $("btn-cancel").addEventListener("click", setDefaults);
 
-  $("btn-sleep").addEventListener("click", async () => {
-    try { await backend.add({ bed: roundTo5(Date.now()), wake: null, quality: null, note: "" }); toast("おやすみなさい。起きたら「いま起きた」を押してください"); }
-    catch (e) { toast("保存できませんでした"); }
-  });
-  $("btn-wake").addEventListener("click", async () => {
-    const o = openEntry(); if (!o) return;
-    const now = roundTo5(Date.now());
-    if (now - o.bed > 20 * 3600000) { startEdit(o.id); toast("20時間を超えています。時刻を直して保存してください"); return; }
-    try { await backend.put(o.id, { ...stripId(o), wake: Math.max(now, o.bed + 5 * MIN) }); toast("おはようございます。記録しました"); }
-    catch (e) { toast("保存できませんでした"); }
-  });
   const stripId = ({ id, ...rest }) => rest;
 
   function startEdit(id) {
@@ -590,7 +632,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   const normalize = (id, d) => ({
     id, bed: Number(d.bed), wake: d.wake == null ? null : Number(d.wake),
     quality: d.quality == null ? null : Number(d.quality), note: typeof d.note === "string" ? d.note : "",
-    src: typeof d.src === "string" ? d.src : "manual",
+    src: typeof d.src === "string" ? d.src : "manual", bedUnknown: d.bedUnknown === true,
   });
 
   function useLocal(reason) {
@@ -636,7 +678,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     }, () => {});
   }
 
-  setInterval(renderAsleep, 60000);
+  setInterval(() => { if (openEntry() || !ui.mode) renderToday(); }, 60000);
   init();
 })();
 </script>
