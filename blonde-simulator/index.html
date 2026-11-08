@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>金髪カラーシミュレーター</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho+B1:wght@700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: salon swatch book — photo stage on the left, numbered work steps on the right, a fan of all swatches below */
+:root{
+  --bg:#eceef2; --surface:#ffffff; --ink:#1c2130; --muted:#5b6274; --line:#d5d9e2;
+  --accent:#2f3fbf; --accent-ink:#ffffff; --chip:#e3e6ee; --good:#1f7a4d; --mask:#ff3d8b;
+  --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#13151b; --surface:#1c1f28; --ink:#eceef4; --muted:#9aa1b3; --line:#2d313d;
+  --accent:#9aa6ff; --accent-ink:#11142a; --chip:#262a35; --good:#5fd39a; --mask:#ff5c9e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13151b; --surface:#1c1f28; --ink:#eceef4; --muted:#9aa1b3; --line:#2d313d;
+  --accent:#9aa6ff; --accent-ink:#11142a; --chip:#262a35; --good:#5fd39a; --mask:#ff5c9e; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+header{display:grid;gap:6px}
+h1{font:700 clamp(26px,4.2vw,38px)/1.25 var(--f-display);margin:0;letter-spacing:.02em;text-wrap:balance}
+h2{font:700 19px/1.4 var(--f-display);margin:0;text-wrap:balance}
+h3{font:700 15px/1.5 var(--f-body);margin:0}
+.lead{color:var(--muted);margin:0;max-width:62ch}
+.privacy{font-size:13px;color:var(--muted);margin:0}
+.main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:12px;position:sticky;top:12px}
+@media (max-width:860px){.stage{position:static}}
+.canvas-box{position:relative;display:flex;justify-content:center;background:var(--chip);border-radius:10px;overflow:hidden;min-height:200px}
+#view{display:block;max-width:100%;max-height:72vh;width:auto;height:auto;touch-action:none;cursor:crosshair}
+#view.viewmode{touch-action:pan-y;cursor:ew-resize}
+.badge-sample{position:absolute;left:10px;top:10px;background:rgba(20,22,30,.72);color:#fff;font-size:12px;padding:2px 10px;border-radius:99px}
+.ba{position:absolute;bottom:10px;font:500 11px var(--f-mono);letter-spacing:.08em;background:rgba(20,22,30,.62);color:#fff;padding:2px 8px;border-radius:4px;pointer-events:none}
+.ba.l{left:10px}.ba.r{right:10px}
+.now{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.now .sw{width:34px;height:34px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line)}
+.now .name{font-weight:700}
+.lv{font:500 12px var(--f-mono);color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.panel{display:grid;gap:14px}
+.step{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px}
+.step-h{display:flex;gap:10px;align-items:baseline}
+.step-n{font:500 12px var(--f-mono);color:var(--accent);letter-spacing:.06em}
+.hint{font-size:13px;color:var(--muted);margin:0}
+button,.btn{font:500 14px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 13px;cursor:pointer;line-height:1.4}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:focus-visible,.btn:focus-within,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.btn input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.btn{position:relative;display:inline-block}
+label.sl{display:grid;grid-template-columns:7.5em minmax(0,1fr) 3.2em;gap:10px;align-items:center;font-size:14px}
+label.sl output{font:500 12px var(--f-mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.tone{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.skin{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--chip)}
+.tone-result{font-size:14px}
+.tone-result b{font-weight:700}
+.pill{display:inline-block;font-size:12px;padding:1px 9px;border-radius:99px;background:var(--chip);color:var(--ink);white-space:nowrap}
+.pill.warm{background:#f3dfb6;color:#5a3b00}.pill.cool{background:#d9def6;color:#1f2b6b}.pill.neutral{background:#e4ddd6;color:#4a3d33}
+.pill.rec{background:var(--good);color:var(--surface)}
+.compare h2{margin-bottom:2px}
+.filters{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;cursor:pointer;text-align:left;padding:0}
+.card[aria-current="true"]{box-shadow:0 0 0 2px var(--accent);border-color:var(--accent)}
+.card canvas{display:block;width:100%;height:auto;background:var(--chip)}
+.card .meta{padding:9px 11px 11px;display:grid;gap:4px}
+.card .t{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.card .t span{font-weight:700;font-size:14px;line-height:1.35}
+.star{border:0;background:none;padding:2px 4px;font-size:18px;line-height:1;color:var(--muted)}
+.star[aria-pressed="true"]{color:#d9a400}
+.card .tags{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.empty{color:var(--muted);font-size:14px;padding:12px 0}
+.guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.guide .step p{margin:0;font-size:14px}
+.scale{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));border-radius:8px;overflow:hidden}
+.scale div{height:22px}
+.scale-l{display:flex;justify-content:space-between;font:500 11px var(--f-mono);color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(10,12,18,.72);display:grid;place-items:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal-in{background:var(--surface);border-radius:14px;padding:16px;display:grid;gap:10px;max-width:min(920px,100%);max-height:100%;overflow:auto}
+.modal-in img{width:100%;height:auto;border-radius:8px}
+footer{color:var(--muted);font-size:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>金髪カラーシミュレーター</h1>
+    <p class="lead">自分の写真で、プラチナ・アッシュ・ハニーなど10色のブロンドを並べて試せます。髪の範囲を選んで、肌の色を判定すると、似合いやすい色に「おすすめ」が付きます。</p>
+    <p class="privacy">写真はこのブラウザの中だけで処理され、どこにも送信・保存されません。</p>
+  </header>
+
+  <div class="main">
+    <section class="stage" aria-label="プレビュー">
+      <div class="canvas-box">
+        <canvas id="view" width="720" height="900" aria-label="髪色プレビュー"></canvas>
+        <span class="badge-sample" id="sampleBadge">サンプル画像</span>
+        <span class="ba l">BEFORE</span><span class="ba r">AFTER</span>
+      </div>
+      <label class="sl" for="split">比較ライン<input id="split" type="range" min="0" max="100" value="45"><output id="splitOut">45%</output></label>
+      <div class="now">
+        <span class="sw" id="nowSw"></span>
+        <div><div class="name" id="nowName"></div><div class="lv" id="nowLv"></div></div>
+        <span id="nowTags" class="row"></span>
+        <span style="flex:1"></span>
+        <button id="exportBtn" type="button">ビフォーアフター画像を作る</button>
+      </div>
+    </section>
+
+    <div class="panel">
+      <section class="step">
+        <div class="step-h"><span class="step-n">STEP 1</span><h2>写真を読み込む</h2></div>
+        <div class="row">
+          <label class="btn primary" for="file">写真を選ぶ<input id="file" type="file" accept="image/*"></label>
+          <button id="sampleBtn" type="button">サンプルに戻す</button>
+        </div>
+        <p class="hint">正面向き・明るい自然光・髪全体が写っている写真がおすすめです。ドラッグ＆ドロップや貼り付けでも読み込めます。</p>
+      </section>
+
+      <section class="step">
+        <div class="step-h"><span class="step-n">STEP 2</span><h2>髪の範囲を選ぶ</h2></div>
+        <div class="seg" role="group" aria-label="ツール">
+          <button type="button" data-tool="wand" aria-pressed="true">自動選択</button>
+          <button type="button" data-tool="brush" aria-pressed="false">ブラシ</button>
+          <button type="button" data-tool="erase" aria-pressed="false">消しゴム</button>
+          <button type="button" data-tool="view" aria-pressed="false">比較</button>
+        </div>
+        <p class="hint" id="toolHint"></p>
+        <label class="sl" for="tol">自動選択の感度<input id="tol" type="range" min="8" max="90" value="38"><output id="tolOut">38</output></label>
+        <label class="sl" for="size">ブラシの太さ<input id="size" type="range" min="4" max="120" value="34"><output id="sizeOut">34</output></label>
+        <div class="row">
+          <button id="undoBtn" type="button">元に戻す</button>
+          <button id="clearBtn" type="button">範囲をリセット</button>
+          <label class="check" for="showMask"><input id="showMask" type="checkbox">選んだ範囲を色で表示</label>
+        </div>
+      </section>
+
+      <section class="step">
+        <div class="step-h"><span class="step-n">STEP 3</span><h2>肌の色を判定する</h2></div>
+        <div class="row">
+          <button id="pickSkinBtn" type="button">頬をタップして判定</button>
+          <select id="toneSel" aria-label="肌タイプを手動で選ぶ">
+            <option value="">肌タイプ：未設定</option>
+            <option value="warm">イエベ（黄み肌）</option>
+            <option value="neutral">ニュートラル</option>
+            <option value="cool">ブルベ（青み肌）</option>
+          </select>
+        </div>
+        <div class="tone"><span class="skin" id="skinSw"></span><span class="tone-result" id="toneText">まだ判定していません。頬の、影やチークのない部分をタップしてください。</span></div>
+        <p class="hint">照明の色で結果は大きく変わります。白っぽい自然光の写真で試し、迷ったら手動で選んでください。</p>
+      </section>
+
+      <section class="step">
+        <div class="step-h"><span class="step-n">STEP 4</span><h2>色味を微調整</h2></div>
+        <label class="sl" for="bright">明るさ<input id="bright" type="range" min="-30" max="30" value="0"><output id="brightOut">±0</output></label>
+        <label class="sl" for="sat">色味の濃さ<input id="sat" type="range" min="-60" max="60" value="0"><output id="satOut">±0</output></label>
+        <label class="sl" for="strength">染まり具合<input id="strength" type="range" min="30" max="100" value="92"><output id="strengthOut">92%</output></label>
+        <label class="sl" for="root">根元の暗さ<input id="root" type="range" min="0" max="100" value="0"><output id="rootOut">0%</output></label>
+        <p class="hint">「根元の暗さ」は地毛を残すシャドウルート風の仕上がりや、伸びてきた時の見え方の確認に使えます。</p>
+      </section>
+    </div>
+  </div>
+
+  <section class="compare" aria-labelledby="cmpH">
+    <div class="filters">
+      <div><h2 id="cmpH">全カラーを並べて比べる</h2><p class="hint">カードを押すと上のプレビューに反映されます。☆でお気に入りに追加。</p></div>
+      <div class="seg" role="group" aria-label="絞り込み">
+        <button type="button" data-filter="all" aria-pressed="true">すべて</button>
+        <button type="button" data-filter="rec" aria-pressed="false">おすすめ</button>
+        <button type="button" data-filter="fav" aria-pressed="false">お気に入り</button>
+      </div>
+    </div>
+    <div class="grid" id="grid" style="margin-top:14px"></div>
+    <p class="empty" id="gridEmpty" hidden></p>
+  </section>
+
+  <section aria-labelledby="guideH" style="display:grid;gap:14px">
+    <h2 id="guideH">似合う金髪の選び方</h2>
+    <div class="guide">
+      <div class="step">
+        <h3>明るさは「レベル」で考える</h3>
+        <div class="scale" aria-hidden="true">
+          <div style="background:#1f1814"></div><div style="background:#33251b"></div><div style="background:#4d3524"></div><div style="background:#6f4d30"></div><div style="background:#94693f"></div><div style="background:#b88d56"></div><div style="background:#d2ad73"></div><div style="background:#e3cc9b"></div><div style="background:#efe6d2"></div>
+        </div>
+        <div class="scale-l"><span>Lv.4</span><span>Lv.8</span><span>Lv.12</span><span>Lv.15</span><span>Lv.19</span></div>
+        <p>日本の美容室ではレベル（トーン）で明るさを表します。黒髪は4〜5、金髪と呼べるのはおよそ13以上で、ブリーチが必要です。プラチナやホワイト系の18以上は2回以上のブリーチが目安です。</p>
+      </div>
+      <div class="step">
+        <h3>イエベ（黄み肌）に多い傾向</h3>
+        <p>ハニー、ゴールド、シャンパン、アプリコットなど黄み・オレンジみのあるブロンドで、肌に血色が出やすくなります。アッシュが強すぎると顔色がくすんで見えることがあります。</p>
+      </div>
+      <div class="step">
+        <h3>ブルベ（青み肌）に多い傾向</h3>
+        <p>プラチナ、アッシュ、ピンク、ラベンダーなど黄みを抑えたブロンドで肌の透明感が出やすくなります。黄色が強いと肌が黄ぐすみして見えることがあります。</p>
+      </div>
+      <div class="step">
+        <h3>美容師さんに見せるときは</h3>
+        <p>気に入った色のビフォーアフター画像と、カード下のレベル（Lv.）を伝えるとイメージが共有しやすくなります。実際の仕上がりは今の髪色・ダメージ・ブリーチ回数で変わるので、あくまで目安として使ってください。</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>シミュレーションは写真の明暗をもとに色を置き換えた目安です。肌タイプ判定は写真1枚の色からの推定で、正式なパーソナルカラー診断ではありません。</footer>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-in">
+    <div class="row" style="justify-content:space-between"><h2>ビフォーアフター</h2><button id="closeModal" type="button">閉じる</button></div>
+    <p class="hint">画像を長押し（スマホ）または右クリック（PC）で保存できます。</p>
+    <img id="exportImg" alt="ビフォーアフター比較画像">
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const PRESETS = [
+  {id:'platinum', name:'プラチナブロンド', hex:'#e6e0d2', lv:18, tone:'cool'},
+  {id:'white', name:'ホワイトブロンド', hex:'#efece6', lv:19, tone:'cool'},
+  {id:'ash', name:'アッシュブロンド', hex:'#c6bfae', lv:15, tone:'cool'},
+  {id:'lavender', name:'ラベンダーアッシュ', hex:'#c9bccd', lv:15, tone:'cool'},
+  {id:'pink', name:'ピンクブロンド', hex:'#dfb3ab', lv:14, tone:'cool'},
+  {id:'milktea', name:'ミルクティーベージュ', hex:'#d2b691', lv:14, tone:'neutral'},
+  {id:'beige', name:'ベージュブロンド', hex:'#dcc39d', lv:15, tone:'neutral'},
+  {id:'champagne', name:'シャンパンゴールド', hex:'#e2ca92', lv:16, tone:'warm'},
+  {id:'gold', name:'ゴールドブロンド', hex:'#d8ac52', lv:15, tone:'warm'},
+  {id:'honey', name:'ハニーブロンド', hex:'#cf9a52', lv:13, tone:'warm'},
+  {id:'apricot', name:'アプリコットブロンド', hex:'#dca476', lv:13, tone:'warm'},
+];
+const TONE_LABEL = {warm:'イエベ向き', cool:'ブルベ向き', neutral:'どちらにも'};
+const MAX_SIDE = 960, THUMB_SIDE = 240;
+const TOOL_HINTS = {
+  wand:'髪をタップすると、似た色の部分がまとめて選ばれます。何か所かタップして広げ、はみ出しは消しゴムで直します。',
+  brush:'なぞった部分が髪として追加されます。毛先や細かい部分に使います。',
+  erase:'なぞった部分を範囲から外します。顔や背景にはみ出した部分を消します。',
+  view:'写真を左右にドラッグすると、ビフォーとアフターの境目を動かせます。'
+};
+
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+const S = {
+  w:0, h:0, src:null, srcData:null, mask:null, mctx:null, feather:null, fctx:null,
+  result:null, rctx:null, overlay:null, octx:null,
+  preset: 7, bright:0, sat:0, strength:.92, root:0, split:.45,
+  tool:'wand', size:34, tol:38, showMask:false, undo:[], hover:null,
+  tone:'', skin:null, filter:'all', fav:new Set(), isSample:true, pickSkin:false
+};
+try { const f = JSON.parse(localStorage.getItem('blondeFav')||'[]'); f.forEach(x=>S.fav.add(x)); } catch(e){}
+function saveFav(){ try{ localStorage.setItem('blondeFav', JSON.stringify([...S.fav])); }catch(e){} }
+
+function mk(w,h){ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; }
+
+/* ---------- color helpers ---------- */
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function rgbToHsl(r,g,b){ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b), mn=Math.min(r,g,b); let h=0,s=0; const l=(mx+mn)/2;
+  if(mx!==mn){ const d=mx-mn; s=l>.5?d/(2-mx-mn):d/(mx+mn);
+    h = mx===r?((g-b)/d+(g<b?6:0)) : mx===g?((b-r)/d+2):((r-g)/d+4); h/=6; } return [h,s,l]; }
+function hslToRgb(h,s,l){ if(s===0){const v=l*255;return [v,v,v];}
+  const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q;
+  const f=t=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+  return [f(h+1/3)*255,f(h)*255,f(h-1/3)*255]; }
+function adjusted(p){ const [r,g,b]=hexToRgb(p.hex); let [h,s,l]=rgbToHsl(r,g,b);
+  l=Math.min(.97,Math.max(.25,l+S.bright/100*.6)); s=Math.min(1,Math.max(0,s*(1+S.sat/100*1.4))); return hslToRgb(h,s,l); }
+function cssRgb(c){ return `rgb(${c.map(v=>Math.round(v)).join(',')})`; }
+function toLab(r,g,b){ const lin=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4);};
+  const R=lin(r),G=lin(g),B=lin(b);
+  let x=(R*.4124+G*.3576+B*.1805)/.95047, y=(R*.2126+G*.7152+B*.0722), z=(R*.0193+G*.1192+B*.9505)/1.08883;
+  const f=t=>t>.008856?Math.cbrt(t):7.787*t+16/116; x=f(x);y=f(y);z=f(z);
+  return [116*y-16, 500*(x-y), 200*(y-z)]; }
+
+/* ---------- recolor core ---------- */
+function recolor(src, mask, out, w, h, base, strength, rootAmt){
+  const n=w*h, hist=new Uint32Array(256); let cnt=0, minY=h, maxY=0;
+  for(let i=0;i<n;i++){ if(mask[i*4+3]>127){ const o=i*4; hist[(src[o]*.299+src[o+1]*.587+src[o+2]*.114)|0]++; cnt++;
+      const y=(i/w)|0; if(y<minY)minY=y; if(y>maxY)maxY=y; } }
+  if(cnt<30){ out.set(src); return; }
+  let acc=0, lo=0, hi=255; const tLo=cnt*.03, tHi=cnt*.985;
+  for(let i=0;i<256;i++){ acc+=hist[i]; if(acc<tLo) lo=i; if(acc<tHi) hi=i; }
+  if(hi-lo<12) hi=lo+12;
+  const span=hi-lo;
+  const sh=[base[0]*.46,base[1]*.42,base[2]*.38];
+  const hl=[base[0]+(255-base[0])*.6, base[1]+(253-base[1])*.6, base[2]+(246-base[2])*.6];
+  const rootLen=Math.max(1,(maxY-minY)*.28);
+  for(let i=0;i<n;i++){
+    const o=i*4; let a=mask[o+3]/255*strength;
+    if(a<.004){ out[o]=src[o];out[o+1]=src[o+1];out[o+2]=src[o+2];out[o+3]=255; continue; }
+    if(rootAmt>0){ const y=(i/w)|0; const d=(y-minY)/rootLen; if(d<1){ const k=1-d; a*=1-rootAmt*k*k*(3-2*k); } }
+    const L=src[o]*.299+src[o+1]*.587+src[o+2]*.114;
+    let t=(L-lo)/span; t=t<0?0:t>1?1:t; t=Math.pow(t,.85);
+    let r,g,b;
+    if(t<.55){ const k=t/.55; r=sh[0]+(base[0]-sh[0])*k; g=sh[1]+(base[1]-sh[1])*k; b=sh[2]+(base[2]-sh[2])*k; }
+    else { const k=(t-.55)/.45; r=base[0]+(hl[0]-base[0])*k; g=base[1]+(hl[1]-base[1])*k; b=base[2]+(hl[2]-base[2])*k; }
+    out[o]=src[o]+(r-src[o])*a; out[o+1]=src[o+1]+(g-src[o+1])*a; out[o+2]=src[o+2]+(b-src[o+2])*a; out[o+3]=255;
+  }
+}
+
+/* ---------- image setup ---------- */
+function setupImage(drawFn, w, h, isSample){
+  S.w=w; S.h=h; S.isSample=isSample;
+  S.src=mk(w,h); const sctx=S.src.getContext('2d',{willReadFrequently:true}); drawFn(sctx);
+  S.srcData=sctx.getImageData(0,0,w,h);
+  S.mask=mk(w,h); S.mctx=S.mask.getContext('2d',{willReadFrequently:true});
+  S.feather=mk(w,h); S.fctx=S.feather.getContext('2d',{willReadFrequently:true});
+  S.result=mk(w,h); S.rctx=S.result.getContext('2d');
+  S.overlay=mk(w,h); S.octx=S.overlay.getContext('2d');
+  view.width=w; view.height=h; S.undo=[];
+  $('sampleBadge').hidden=!isSample;
+}
+function loadSample(){
+  const w=720,h=900; let maskFn;
+  setupImage(ctx=>{ maskFn=drawSample(ctx,w,h); }, w, h, true);
+  maskFn(S.mctx);
+  S.skin=null; setTone(''); $('toneSel').value='';
+  refresh(true);
+}
+function loadFile(file){
+  if(!file || !file.type.startsWith('image/')) return;
+  const url=URL.createObjectURL(file); const img=new Image();
+  img.onload=()=>{ const sc=Math.min(1,MAX_SIDE/Math.max(img.naturalWidth,img.naturalHeight));
+    const w=Math.round(img.naturalWidth*sc), h=Math.round(img.naturalHeight*sc);
+    setupImage(ctx=>ctx.drawImage(img,0,0,w,h), w, h, false); URL.revokeObjectURL(url);
+    S.skin=null; setTone(''); $('toneSel').value='';
+    setTool('wand'); refresh(true);
+    $('toolHint').textContent='写真を読み込みました。まず髪の部分を何か所かタップして範囲を選んでください。';
+  };
+  img.onerror=()=>{ alertMsg('この画像は読み込めませんでした。JPEGかPNGの写真を選んでください。'); URL.revokeObjectURL(url); };
+  img.src=url;
+}
+function alertMsg(t){ $('toolHint').textContent=t; }
+
+/* Illustrated sample portrait; returns a function that paints its hair mask */
+function drawSample(ctx,w,h){
+  const bg=ctx.createLinearGradient(0,0,0,h); bg.addColorStop(0,'#c8d1db'); bg.addColorStop(1,'#a7b2bf'); ctx.fillStyle=bg; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#39404d'; ctx.beginPath(); ctx.ellipse(360,960,330,260,0,0,Math.PI*2); ctx.fill();
+  const hairBack=new Path2D(); hairBack.moveTo(150,860); hairBack.bezierCurveTo(120,600,150,330,205,240); hairBack.bezierCurveTo(260,120,460,120,515,240);
+  hairBack.bezierCurveTo(570,330,600,600,570,860); hairBack.bezierCurveTo(520,880,470,700,455,560); hairBack.lineTo(265,560); hairBack.bezierCurveTo(250,700,200,880,150,860); hairBack.closePath();
+  const bangs=new Path2D(); bangs.moveTo(212,375); bangs.bezierCurveTo(200,250,280,185,360,186); bangs.bezierCurveTo(440,185,520,250,508,375);
+  bangs.lineTo(482,322); bangs.lineTo(452,350); bangs.lineTo(420,312); bangs.lineTo(392,342); bangs.lineTo(360,305); bangs.lineTo(328,342); bangs.lineTo(298,312); bangs.lineTo(268,350); bangs.lineTo(238,322); bangs.closePath();
+  const face=new Path2D(); face.ellipse(360,405,132,172,0,0,Math.PI*2);
+  const neck=new Path2D(); neck.rect(312,520,96,140);
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  const paintHair=(path,top)=>{ ctx.save(); ctx.clip(path); ctx.fillStyle='#231a15'; ctx.fillRect(0,0,w,h);
+    for(let i=0;i<520;i++){ const x=110+rnd()*500, l=rnd(); ctx.strokeStyle=l>.55?`rgba(150,110,80,${.05+rnd()*.12})`:`rgba(5,3,2,${.15+rnd()*.25})`;
+      ctx.lineWidth=.8+rnd()*2.2; ctx.beginPath(); ctx.moveTo(360+(x-360)*.25,top); ctx.bezierCurveTo(x-30,top+200,x+20,500,x+(rnd()-.5)*40,880); ctx.stroke(); }
+    const sh=ctx.createRadialGradient(330,250,10,330,250,170); sh.addColorStop(0,'rgba(190,150,120,.32)'); sh.addColorStop(1,'rgba(190,150,120,0)'); ctx.fillStyle=sh; ctx.fillRect(0,0,w,h);
+    ctx.restore(); };
+  paintHair(hairBack,150);
+  ctx.fillStyle='#d9ae90'; ctx.fill(neck);
+  const fg=ctx.createRadialGradient(345,380,40,360,405,190); fg.addColorStop(0,'#efcdb2'); fg.addColorStop(1,'#d8ab8c'); ctx.fillStyle=fg; ctx.fill(face);
+  ctx.fillStyle='rgba(225,140,130,.25)'; [[285,470],[435,470]].forEach(([x,y])=>{ctx.beginPath();ctx.ellipse(x,y,32,18,0,0,Math.PI*2);ctx.fill();});
+  ctx.fillStyle='#2a1d17'; [[305,418],[415,418]].forEach(([x,y])=>{ctx.beginPath();ctx.ellipse(x,y,15,9,0,0,Math.PI*2);ctx.fill();});
+  ctx.strokeStyle='#3b2a20'; ctx.lineWidth=5; ctx.lineCap='round';
+  [[275,385,335,378],[385,378,445,385]].forEach(([a,b,c,d])=>{ctx.beginPath();ctx.moveTo(a,b);ctx.quadraticCurveTo((a+c)/2,b-10,c,d);ctx.stroke();});
+  ctx.strokeStyle='rgba(150,95,75,.6)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(360,430); ctx.quadraticCurveTo(352,470,366,478); ctx.stroke();
+  ctx.fillStyle='#c4736d'; ctx.beginPath(); ctx.ellipse(360,520,30,10,0,0,Math.PI*2); ctx.fill();
+  paintHair(bangs,186);
+  return m=>{ m.clearRect(0,0,w,h); m.fillStyle='#fff'; m.fill(hairBack); m.globalCompositeOperation='destination-out'; m.fill(face); m.fill(neck);
+    m.globalCompositeOperation='source-over'; m.fill(bangs); };
+}
+
+/* ---------- rendering ---------- */
+let renderQueued=false, thumbTimer=0;
+function refresh(withThumbs){
+  if(!renderQueued){ renderQueued=true; requestAnimationFrame(()=>{ renderQueued=false; recolorMain(); compose(); }); }
+  if(withThumbs){ clearTimeout(thumbTimer); thumbTimer=setTimeout(renderThumbs,220); }
+  updateNow();
+}
+function updateFeather(){
+  S.fctx.clearRect(0,0,S.w,S.h); S.fctx.filter=`blur(${Math.max(1,S.w/480)}px)`; S.fctx.drawImage(S.mask,0,0); S.fctx.filter='none';
+}
+function recolorMain(){
+  updateFeather();
+  const m=S.fctx.getImageData(0,0,S.w,S.h).data;
+  const out=S.rctx.createImageData(S.w,S.h);
+  recolor(S.srcData.data,m,out.data,S.w,S.h,adjusted(PRESETS[S.preset]),S.strength,S.root);
+  S.rctx.putImageData(out,0,0);
+}
+function compose(){
+  const {w,h}=S; vctx.clearRect(0,0,w,h);
+  vctx.drawImage(S.src,0,0);
+  const sx=Math.round(S.split*w);
+  vctx.save(); vctx.beginPath(); vctx.rect(sx,0,w-sx,h); vctx.clip(); vctx.drawImage(S.result,0,0); vctx.restore();
+  if(S.showMask){ S.octx.globalCompositeOperation='source-over'; S.octx.clearRect(0,0,w,h);
+    S.octx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--mask').trim()||'#ff3d8b'; S.octx.fillRect(0,0,w,h);
+    S.octx.globalCompositeOperation='destination-in'; S.octx.drawImage(S.mask,0,0);
+    vctx.globalAlpha=.45; vctx.drawImage(S.overlay,0,0); vctx.globalAlpha=1; }
+  if(sx>0 && sx<w){ vctx.fillStyle='rgba(255,255,255,.9)'; vctx.fillRect(sx-1,0,2,h);
+    vctx.beginPath(); vctx.arc(sx,h/2,Math.max(10,w/48),0,Math.PI*2); vctx.fill();
+    vctx.fillStyle='#1c2130'; vctx.font=`${Math.max(10,w/60)}px sans-serif`; vctx.textAlign='center'; vctx.textBaseline='middle'; vctx.fillText('◀▶',sx,h/2); }
+  if(S.hover && (S.tool==='brush'||S.tool==='erase')){ vctx.strokeStyle='rgba(255,255,255,.95)'; vctx.lineWidth=Math.max(1.5,w/500);
+    vctx.beginPath(); vctx.arc(S.hover[0],S.hover[1],S.size/2*(S.w/600),0,Math.PI*2); vctx.stroke();
+    vctx.strokeStyle='rgba(0,0,0,.5)'; vctx.beginPath(); vctx.arc(S.hover[0],S.hover[1],S.size/2*(S.w/600)+1.5,0,Math.PI*2); vctx.stroke(); }
+}
+
+/* thumbnails */
+const cards=[];
+function buildGrid(){
+  const g=$('grid');
+  PRESETS.forEach((p,i)=>{
+    const card=document.createElement('div'); card.className='card'; card.tabIndex=0; card.setAttribute('role','button');
+    card.setAttribute('aria-label',p.name+'を選ぶ');
+    const cv=document.createElement('canvas'); cv.width=10; cv.height=12;
+    const meta=document.createElement('div'); meta.className='meta';
+    meta.innerHTML=`<div class="t"><span>${p.name}</span><button type="button" class="star" aria-label="お気に入り" aria-pressed="false">★</button></div>
+      <div class="tags"><span class="lv">Lv.${p.lv}</span><span class="pill ${p.tone}">${TONE_LABEL[p.tone]}</span><span class="pill rec" hidden>おすすめ</span></div>`;
+    card.append(cv,meta); g.append(card);
+    const star=meta.querySelector('.star');
+    star.addEventListener('click',e=>{ e.stopPropagation(); S.fav.has(p.id)?S.fav.delete(p.id):S.fav.add(p.id); saveFav(); updateCards(); });
+    const pick=()=>{ S.preset=i; updateCards(); refresh(false); };
+    card.addEventListener('click',pick);
+    card.addEventListener('keydown',e=>{ if(e.target===card && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); pick(); } });
+    cards.push({card,cv,star,rec:meta.querySelector('.pill.rec'),p});
+  });
+}
+function renderThumbs(){
+  const sc=THUMB_SIDE/Math.max(S.w,S.h), tw=Math.round(S.w*sc), th=Math.round(S.h*sc);
+  const ts=mk(tw,th), tsc=ts.getContext('2d',{willReadFrequently:true}); tsc.drawImage(S.src,0,0,tw,th);
+  const tm=mk(tw,th), tmc=tm.getContext('2d',{willReadFrequently:true}); updateFeather(); tmc.drawImage(S.feather,0,0,tw,th);
+  const sd=tsc.getImageData(0,0,tw,th).data, md=tmc.getImageData(0,0,tw,th).data;
+  cards.forEach(c=>{ c.cv.width=tw; c.cv.height=th; const cx=c.cv.getContext('2d'); const out=cx.createImageData(tw,th);
+    const saved=S.preset; recolor(sd,md,out.data,tw,th,adjusted(c.p),S.strength,S.root); cx.putImageData(out,0,0); S.preset=saved; });
+}
+function isRec(p){ return !!S.tone && (p.tone===S.tone || p.tone==='neutral' || S.tone==='neutral'); }
+function updateCards(){
+  let shown=0;
+  cards.forEach((c,i)=>{ const fav=S.fav.has(c.p.id), rec=isRec(c.p);
+    c.star.setAttribute('aria-pressed',fav); c.rec.hidden=!rec; c.card.setAttribute('aria-current',i===S.preset);
+    const vis=S.filter==='all'||(S.filter==='rec'&&rec)||(S.filter==='fav'&&fav); c.card.hidden=!vis; if(vis)shown++; });
+  const em=$('gridEmpty'); em.hidden=shown>0;
+  em.textContent=S.filter==='fav'?'お気に入りはまだありません。カードの★を押すとここに集まります。':'肌の色を判定するか、STEP 3で肌タイプを選ぶと、おすすめが表示されます。';
+  updateNow();
+}
+function updateNow(){
+  const p=PRESETS[S.preset]; $('nowSw').style.background=cssRgb(adjusted(p)); $('nowName').textContent=p.name;
+  $('nowLv').textContent=`Lv.${p.lv}`+(S.bright?`（明るさ ${S.bright>0?'+':''}${S.bright}）`:'');
+  $('nowTags').innerHTML=`<span class="pill ${p.tone}">${TONE_LABEL[p.tone]}</span>`+(isRec(p)?'<span class="pill rec">おすすめ</span>':'');
+}
+
+/* ---------- skin tone ---------- */
+function setTone(t, detail){
+  S.tone=t; const el=$('toneText');
+  if(!t){ el.textContent='まだ判定していません。頬の、影やチークのない部分をタップしてください。'; $('skinSw').style.background=''; }
+  else { const nm={warm:'イエベ（黄み肌）寄り',cool:'ブルベ（青み肌）寄り',neutral:'ニュートラル'}[t];
+    const rec={warm:'ハニー・ゴールド・シャンパン・アプリコット系',cool:'プラチナ・アッシュ・ピンク・ラベンダー系',neutral:'ミルクティー・ベージュ系を中心に幅広く'}[t];
+    el.innerHTML=`<b>${nm}</b>${detail?'（'+detail+'）':''}。${rec}が似合いやすい傾向です。`; }
+  updateCards();
+}
+function pickSkin(x,y){
+  const r=Math.max(2,Math.round(S.w/160)); const d=S.srcData.data; let R=0,G=0,B=0,n=0;
+  for(let j=-r;j<=r;j++)for(let i=-r;i<=r;i++){ const xx=x+i,yy=y+j; if(xx<0||yy<0||xx>=S.w||yy>=S.h)continue; const o=(yy*S.w+xx)*4; R+=d[o];G+=d[o+1];B+=d[o+2];n++; }
+  R/=n;G/=n;B/=n; S.skin=[R,G,B]; $('skinSw').style.background=cssRgb(S.skin);
+  const [L,a,b]=toLab(R,G,B); const hue=Math.atan2(b,a)*180/Math.PI;
+  if(a<2 && b<2){ alertMsg('肌の色として読み取れませんでした。頬の明るい部分をもう一度タップしてください。'); return; }
+  const t=hue>=60?'warm':hue<=52?'cool':'neutral';
+  const depth=L>70?'明るめの肌':L<52?'深みのある肌':'中間の明るさの肌';
+  $('toneSel').value=t; setTone(t, `色相角 ${hue.toFixed(0)}°・${depth}`);
+  S.pickSkin=false; $('pickSkinBtn').setAttribute('aria-pressed','false'); setTool(S.tool);
+}
+
+/* ---------- tools ---------- */
+function setTool(t){ S.tool=t; S.pickSkin=false; $('pickSkinBtn').classList.remove('primary');
+  document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===t));
+  $('toolHint').textContent=TOOL_HINTS[t]; view.classList.toggle('viewmode',t==='view'); compose(); }
+function pushUndo(){ S.undo.push(S.mctx.getImageData(0,0,S.w,S.h)); if(S.undo.length>20)S.undo.shift(); }
+function toCanvas(e){ const r=view.getBoundingClientRect(); return [(e.clientX-r.left)*S.w/r.width,(e.clientY-r.top)*S.h/r.height]; }
+function dab(x,y){ const rad=S.size/2*(S.w/600); const g=S.mctx.createRadialGradient(x,y,rad*.55,x,y,rad);
+  g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  S.mctx.globalCompositeOperation=S.tool==='erase'?'destination-out':'source-over'; S.mctx.fillStyle=g;
+  S.mctx.beginPath(); S.mctx.arc(x,y,rad,0,Math.PI*2); S.mctx.fill(); S.mctx.globalCompositeOperation='source-over'; }
+function strokeTo(a,b){ const rad=S.size/2*(S.w/600), step=Math.max(1,rad/3), dx=b[0]-a[0], dy=b[1]-a[1], dist=Math.hypot(dx,dy);
+  for(let s=step;s<=dist;s+=step) dab(a[0]+dx*s/dist,a[1]+dy*s/dist); dab(b[0],b[1]); }
+function wand(x,y){
+  x=Math.floor(x); y=Math.floor(y); if(x<0||y<0||x>=S.w||y>=S.h) return;
+  const {w,h}=S, d=S.srcData.data, o0=(y*w+x)*4;
+  let sr=0,sg=0,sb=0,c=0; for(let j=-2;j<=2;j++)for(let i=-2;i<=2;i++){const xx=Math.min(w-1,Math.max(0,x+i)),yy=Math.min(h-1,Math.max(0,y+j)),o=(yy*w+xx)*4;sr+=d[o];sg+=d[o+1];sb+=d[o+2];c++;}
+  sr/=c;sg/=c;sb/=c; const tol=S.tol*S.tol*3;
+  const seen=new Uint8Array(w*h), stack=[y*w+x]; seen[y*w+x]=1;
+  const md=S.mctx.getImageData(0,0,w,h);
+  while(stack.length){ const p=stack.pop(), o=p*4; const dr=d[o]-sr, dg=d[o+1]-sg, db=d[o+2]-sb;
+    if(dr*dr*1.0+dg*dg*1.2+db*db*.8>tol) continue;
+    md.data[o]=md.data[o+1]=md.data[o+2]=255; md.data[o+3]=255;
+    const px=p%w, py=(p/w)|0;
+    if(px>0&&!seen[p-1]){seen[p-1]=1;stack.push(p-1);} if(px<w-1&&!seen[p+1]){seen[p+1]=1;stack.push(p+1);}
+    if(py>0&&!seen[p-w]){seen[p-w]=1;stack.push(p-w);} if(py<h-1&&!seen[p+w]){seen[p+w]=1;stack.push(p+w);} }
+  S.mctx.putImageData(md,0,0);
+  // close tiny holes from strand highlights
+  S.fctx.clearRect(0,0,w,h); S.fctx.filter=`blur(${Math.max(1,w/400)}px)`; S.fctx.drawImage(S.mask,0,0); S.fctx.filter='none';
+  const f=S.fctx.getImageData(0,0,w,h); const fd=f.data;
+  for(let i=3;i<fd.length;i+=4){ if(fd[i]>90 && md.data[i]<255){ md.data[i-3]=md.data[i-2]=md.data[i-1]=255; md.data[i]=255; } }
+  S.mctx.putImageData(md,0,0);
+}
+let drawing=null;
+view.addEventListener('pointerdown',e=>{
+  const pt=toCanvas(e);
+  if(S.pickSkin){ pickSkin(Math.round(pt[0]),Math.round(pt[1])); return; }
+  if(S.tool==='view'){ drawing='split'; view.setPointerCapture(e.pointerId); setSplit(pt[0]/S.w); return; }
+  view.setPointerCapture(e.pointerId); pushUndo();
+  if(S.tool==='wand'){ wand(pt[0],pt[1]); refresh(true); return; }
+  drawing=pt; dab(pt[0],pt[1]); refresh(false);
+});
+view.addEventListener('pointermove',e=>{
+  const pt=toCanvas(e); S.hover=e.pointerType==='mouse'?pt:null;
+  if(drawing==='split'){ setSplit(pt[0]/S.w); return; }
+  if(drawing){ strokeTo(drawing,pt); drawing=pt; refresh(false); } else if(S.hover) compose();
+});
+const endDraw=()=>{ if(drawing && drawing!=='split') refresh(true); drawing=null; };
+view.addEventListener('pointerup',endDraw); view.addEventListener('pointercancel',endDraw);
+view.addEventListener('pointerleave',()=>{ S.hover=null; if(!drawing) compose(); });
+
+function setSplit(v){ S.split=Math.min(1,Math.max(0,v)); $('split').value=Math.round(S.split*100); $('splitOut').textContent=Math.round(S.split*100)+'%'; compose(); }
+
+/* ---------- controls ---------- */
+document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{ S.filter=b.dataset.filter;
+  document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',x===b)); updateCards(); }));
+const bindRange=(id,fn,fmt)=>{ const el=$(id), out=$(id+'Out'); const upd=()=>{ const v=+el.value; out.textContent=fmt(v); fn(v); }; el.addEventListener('input',upd); };
+const pm=v=>v===0?'±0':(v>0?'+':'')+v;
+bindRange('tol',v=>S.tol=v,v=>v);
+bindRange('size',v=>{S.size=v;compose();},v=>v);
+bindRange('bright',v=>{S.bright=v;refresh(true);},pm);
+bindRange('sat',v=>{S.sat=v;refresh(true);},pm);
+bindRange('strength',v=>{S.strength=v/100;refresh(true);},v=>v+'%');
+bindRange('root',v=>{S.root=v/100;refresh(true);},v=>v+'%');
+$('split').addEventListener('input',e=>setSplit(e.target.value/100));
+$('showMask').addEventListener('change',e=>{S.showMask=e.target.checked;compose();});
+$('undoBtn').addEventListener('click',()=>{ const u=S.undo.pop(); if(u){ S.mctx.putImageData(u,0,0); refresh(true);} });
+$('clearBtn').addEventListener('click',()=>{ pushUndo(); S.mctx.clearRect(0,0,S.w,S.h); refresh(true); alertMsg('範囲をリセットしました。「元に戻す」で取り消せます。'); });
+$('file').addEventListener('change',e=>{ loadFile(e.target.files[0]); e.target.value=''; });
+$('sampleBtn').addEventListener('click',()=>{ loadSample(); setTool('wand'); });
+$('pickSkinBtn').addEventListener('click',()=>{ S.pickSkin=!S.pickSkin; $('pickSkinBtn').classList.toggle('primary',S.pickSkin);
+  alertMsg(S.pickSkin?'写真の頬の部分をタップしてください。':TOOL_HINTS[S.tool]); });
+$('toneSel').addEventListener('change',e=>setTone(e.target.value, e.target.value?'手動で選択':''));
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{ e.preventDefault(); loadFile(e.dataTransfer.files[0]); });
+document.addEventListener('paste',e=>{ const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/')); if(it) loadFile(it.getAsFile()); });
+
+/* export before/after */
+$('exportBtn').addEventListener('click',()=>{
+  const {w,h}=S, pad=Math.round(w*.04), lab=Math.round(w*.09), c=mk(w*2+pad*3,h+pad*2+lab), x=c.getContext('2d');
+  x.fillStyle='#ffffff'; x.fillRect(0,0,c.width,c.height);
+  x.drawImage(S.src,pad,pad); x.drawImage(S.result,w+pad*2,pad);
+  x.fillStyle='#1c2130'; x.font=`700 ${Math.round(lab*.42)}px "Zen Kaku Gothic New",sans-serif`; x.textBaseline='middle';
+  const p=PRESETS[S.preset]; x.fillText('BEFORE',pad,h+pad+lab/2); x.fillText(`AFTER  ${p.name}  Lv.${p.lv}`,w+pad*2,h+pad+lab/2);
+  $('exportImg').src=c.toDataURL('image/jpeg',.9); $('modal').hidden=false;
+});
+$('closeModal').addEventListener('click',()=>$('modal').hidden=true);
+$('modal').addEventListener('click',e=>{ if(e.target.id==='modal') $('modal').hidden=true; });
+
+buildGrid();
+loadSample();
+setTool('wand');
+updateCards();
+})();
+</script>
+</body>
+</html>
