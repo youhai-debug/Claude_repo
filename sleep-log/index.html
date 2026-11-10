@@ -153,6 +153,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
 .chip-toggle { padding: 6px 14px; font-size: .85rem; border-radius: 999px; }
 .chip-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .done-line .eyebrow { margin-right: 6px; }
+.cut { margin-left: 5px; font-family: var(--f-data); font-size: .72rem; opacity: .75; }
 .tag-group { display: flex; flex-direction: column; gap: 4px; }
 .tag-group .label { font-size: .75rem; }
 .tags.left { justify-content: flex-start; }
@@ -399,10 +400,13 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ---------- quick card: いまから寝る / いま起きた ----------
-  // Things before bed that affect sleep. Clock cut-offs assume a bedtime around 0:00:
-  // caffeine 8 h before, alcohol / big meal 3 h, hard exercise 2 h, screens 1 h, naps after 15:00.
-  const BEFORE = ["16時以降カフェイン", "21時以降お酒", "21時以降の食事", "22時以降の激しい運動", "23時以降スマホ・画面",
-    "15時以降の昼寝", "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
+  // Things before bed that affect sleep, measured back from that night's bedtime so they
+  // keep their meaning if bedtime shifts. Value = hours before bed (shown as a clock hint).
+  const CUTOFF = {
+    "寝る8時間前以降カフェイン": 8, "寝る3時間前以降お酒": 3, "寝る3時間前以降の食事": 3,
+    "寝る2時間前以降の激しい運動": 2, "寝る1時間前以降スマホ・画面": 1, "寝る8時間前以降の昼寝": 8,
+  };
+  const BEFORE = [...Object.keys(CUTOFF), "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
   // What the night itself was like.
   const NIGHT = ["朝帰り", "寝つけなかった", "夜中に起きた", "暑い・寒い", "物音・明るさ"];
   const TAGS = [...BEFORE, ...NIGHT];
@@ -503,7 +507,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <p class="done-line">${kn ? hm(fresh.bed) : "不明"} → ${hm(fresh.wake)} <span class="muted" style="font-size:1rem">${kn ? durJa(dur) : ""}</span></p>
         <p class="sub">記録しました。よければ目覚めの気分と、当てはまるものをタップ（押すたびに保存・あとからでも変えられます）。</p>
         <div class="tags" role="group" aria-label="目覚めの気分">${QUALITY.map(([v, t]) => `<button type="button" data-act="fq" data-id="${fresh.id}" data-v="${v}" aria-pressed="${fresh.quality === v}">${t}</button>`).join("")}</div>
-        ${tagGroups(fresh.tags, "ftag", fresh.id)}
+        ${tagGroups(fresh.tags, "ftag", fresh.id, known(fresh) ? fresh.bed : null)}
         <div class="tags">
           <button type="button" class="add-chip" data-act="tag-open" aria-expanded="${!!ui.adding}">＋ 自分で追加</button></div>
         ${ui.adding ? `<div class="addrow"><input id="new-tag" maxlength="12" placeholder="例：残業、運動した、頭痛" aria-label="追加する項目">
@@ -594,8 +598,10 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   });
 
   // Chips in two groups: before bed (built-in + user-added) and during the night.
-  function tagGroups(selected, act, id) {
-    const chip = (t) => `<button type="button" data-act="${act}" ${id ? `data-id="${id}"` : ""} data-tag="${esc(t)}" aria-pressed="${selected.includes(t)}">${esc(t)}</button>`;
+  // bedMs (optional) adds the clock time each cut-off falls on for that night.
+  function tagGroups(selected, act, id, bedMs) {
+    const hint = (t) => CUTOFF[t] && bedMs ? `<small class="cut">${hm(bedMs - CUTOFF[t] * H)}〜</small>` : "";
+    const chip = (t) => `<button type="button" data-act="${act}" ${id ? `data-id="${id}"` : ""} data-tag="${esc(t)}" aria-pressed="${selected.includes(t)}">${esc(t)}${hint(t)}</button>`;
     const before = [...BEFORE, ...customTags.filter((t) => !TAGS.includes(t))];
     const extra = selected.filter((t) => !before.includes(t) && !NIGHT.includes(t)); // older or removed choices still on this record
     return `<div class="tag-group"><span class="label">寝る前</span><div class="tags left" role="group" aria-label="寝る前">${[...before, ...extra].map(chip).join("")}</div></div>
@@ -634,7 +640,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       QUALITY.map(([v, t]) => `<input type="radio" name="q" id="q${v}" value="${v}"><label for="q${v}">${t}</label>`).join("");
   }
   let formTags = [];
-  const renderFormTags = () => { $("form-tags").innerHTML = tagGroups(formTags, "formtag"); };
+  const renderFormTags = () => { $("form-tags").innerHTML = tagGroups(formTags, "formtag", null, fromLocalInput($("bed").value)); };
   $("form-tags").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-act=formtag]"); if (!b) return;
     const t = b.dataset.tag; formTags = formTags.includes(t) ? formTags.filter((x) => x !== t) : [...formTags, t]; renderFormTags();
@@ -671,6 +677,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     p.innerHTML = `睡眠 <span class="num">${durShort(m)}</span>（${durJa(m)}） — <span class="chip ${lv}">${levelText[lv]}</span>`;
   }
   ["bed", "wake"].forEach((id) => $(id).addEventListener("input", updatePreview));
+  $("bed").addEventListener("input", () => renderFormTags());
 
   $("form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
