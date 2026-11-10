@@ -404,9 +404,10 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   // keep their meaning if bedtime shifts. Value = hours before bed (shown as a clock hint).
   const CUTOFF = {
     "寝る8時間前以降カフェイン": 8, "寝る3時間前以降お酒": 3, "寝る3時間前以降の食事": 3,
-    "寝る2時間前以降の激しい運動": 2, "寝る1時間前以降スマホ・画面": 1, "寝る8時間前以降の昼寝": 8,
+    "寝る2時間前以降の激しい運動": 2, "寝る8時間前以降の昼寝": 8,
   };
-  const BEFORE = [...Object.keys(CUTOFF), "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
+  // Phone use is near-daily (dimmed, warm screen), so record only what varies: stimulating content and delayed bedtime.
+  const BEFORE = [...Object.keys(CUTOFF), "寝る前に頭が冴える内容", "スマホで寝るのが遅れた", "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
   // What the night itself was like.
   const NIGHT = ["朝帰り", "寝つけなかった", "夜中に起きた", "暑い・寒い", "物音・明るさ"];
   const TAGS = [...BEFORE, ...NIGHT];
