@@ -208,6 +208,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <div class="quality" role="radiogroup" aria-labelledby="q-label" id="quality"></div>
       </div>
       <div class="field wide" id="form-tags"></div>
+      <div class="field"><label for="drowsy">起きた日の日中の眠気</label>
+        <select id="drowsy"><option value="">記録しない</option><option value="0">眠くなかった</option><option value="1">少し眠かった</option><option value="2">かなり眠かった</option></select></div>
       <div class="field wide"><label for="note">メモ（選択肢にないこと、量や時刻など）</label><textarea id="note" rows="2" maxlength="300"></textarea></div>
       <div class="preview" id="preview" aria-live="polite"></div>
       <div class="actions">
@@ -234,6 +236,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   const DAY = 86400000, MIN = 60000;
   const WD = ["日", "月", "火", "水", "木", "金", "土"];
   const QUALITY = [[1, "最悪"], [2, "だるい"], [3, "ふつう"], [4, "すっきり"], [5, "最高"]];
+  // Daytime sleepiness on the day after a night; stored on that night's main entry.
+  const DROWSY = [[0, "眠くなかった"], [1, "少し眠かった"], [2, "かなり眠かった"]];
   const LS_KEY = "nemuricho.v1";
 
   let entries = [];      // {id, bed, wake|null, quality|null, note}
@@ -328,6 +332,12 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <div><dt>平均の就寝</dt><dd>${clockFromEvening(mean(beds))}<small>${rows.length > 1 ? ` ±${Math.round(sd(beds))}分` : ""}</small></dd></div>
         <div><dt>平均の起床</dt><dd>${clockFromEvening(mean(wakes))}<small>${rows.length > 1 ? ` ±${Math.round(sd(wakes))}分` : ""}</small></dd></div>
       </dl>
+      ${(() => {
+        const ds = []; for (let i = 0; i < 7; i++) { const m = mainOf(today0 - i * DAY); if (m && m.dayDrowsy != null) ds.push(m.dayDrowsy); }
+        if (!ds.length) return `<p class="sub" style="margin:0">日中の眠気はまだ記録がありません。夕方以降にページを開くと聞きます。</p>`;
+        const c = [0, 1, 2].map((v) => ds.filter((x) => x === v).length);
+        return `<p style="margin:0">日中の眠気（${ds.length}日）：眠くなかった <span class="num">${c[0]}</span>日 · 少し <span class="num">${c[1]}</span>日 · かなり <span class="num">${c[2]}</span>日</p>`;
+      })()}
       <p class="muted" style="margin:0;font-size:.82rem">記録のある${rows.length}日分で計算${unknownDays ? `（寝た時刻が不明な${unknownDays}日は除外）` : ""}。± は就寝・起床時刻のばらつき（標準偏差）で、小さいほど生活リズムが安定しています。</p>`;
   }
 
@@ -380,7 +390,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     }
     const q = Object.fromEntries(QUALITY);
     el.innerHTML = `<div class="log-wrap"><table>
-      <thead><tr><th>起床日</th><th>就寝 → 起床</th><th>睡眠</th><th>気分</th><th>メモ</th><th></th></tr></thead>
+      <thead><tr><th>起床日</th><th>就寝 → 起床</th><th>睡眠</th><th>気分</th><th>日中の眠気</th><th>メモ</th><th></th></tr></thead>
       <tbody>${list.map((e) => {
         const dur = e.wake && known(e) ? (e.wake - e.bed) / MIN : null;
         const lv = !e.wake ? "open" : dur == null ? "unk" : level(dur);
@@ -390,6 +400,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
           <td class="t">${known(e) ? `${md(e.bed).replace(/\(.\)/, "")} ${hm(e.bed)}` : "不明"} → ${e.wake ? hm(e.wake) : "おやすみ中"}</td>
           <td class="t"><span class="dot ${lv}"></span>${dur == null ? "—" : durShort(dur)}</td>
           <td style="white-space:nowrap">${e.quality ? q[e.quality] : '<span class="muted">—</span>'}</td>
+          <td style="white-space:nowrap">${e.dayDrowsy == null ? '<span class="muted">—</span>' : DROWSY[e.dayDrowsy][1]}</td>
           <td class="note">${[...(e.tags || []), e.note].filter(Boolean).map(esc).join("、")}${e.src === "usual" ? '<span class="src">いつも通り</span>' : ""}</td>
           <td class="ops">${confirming
             ? `<button class="link danger" data-act="del-yes" data-id="${e.id}">削除する</button><button class="link" data-act="del-no">やめる</button>`
@@ -508,6 +519,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
         <p class="done-line">${kn ? hm(fresh.bed) : "不明"} → ${hm(fresh.wake)} <span class="muted" style="font-size:1rem">${kn ? durJa(dur) : ""}</span></p>
         <p class="sub">記録しました。よければ目覚めの気分と、当てはまるものをタップ（押すたびに保存・あとからでも変えられます）。</p>
         <div class="tags" role="group" aria-label="目覚めの気分">${QUALITY.map(([v, t]) => `<button type="button" data-act="fq" data-id="${fresh.id}" data-v="${v}" aria-pressed="${fresh.quality === v}">${t}</button>`).join("")}</div>
+        ${(() => { const y = mainOf(startOfDay(fresh.wake) - DAY); return y && y !== fresh && (y.dayDrowsy == null || ui.answeredY === y.id) ? drowsyRow(y, "きのうの日中の眠気（聞きそびれた分）") : ""; })()}
         ${tagGroups(fresh.tags, "ftag", fresh.id, known(fresh) ? fresh.bed : null)}
         <div class="tags">
           <button type="button" class="add-chip" data-act="tag-open" aria-expanded="${!!ui.adding}">＋ 自分で追加</button></div>
@@ -522,10 +534,12 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     }
     if (hasNight(d0)) {
       const list = byWakeDay().get(dayKey(d0)), kn = list.filter(known);
-      const main = (kn.length ? kn : list).reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a));
+      const main = mainOf(d0);
       const total = kn.reduce((s, e) => s + (e.wake - e.bed) / MIN, 0);
+      const askDrowsy = !morning || main.dayDrowsy != null;
       summary = `<div class="done-row"><p class="done-line"><span class="eyebrow">${nightLabel(d0)}</span> ${known(main) ? hm(main.bed) : "不明"} → ${hm(main.wake)} <span class="muted" style="font-size:1rem">${kn.length ? durJa(total) : ""}</span></p>
-        <button type="button" class="link" data-act="edit-main" data-id="${main.id}">修正</button></div>`;
+        <button type="button" class="link" data-act="edit-main" data-id="${main.id}">修正</button></div>
+        ${askDrowsy ? drowsyRow(main, d0 === startOfDay(now) ? "今日の日中の眠気" : `${md(d0)}の日中の眠気`) : ""}`;
     }
     const sleepBtn = `<button type="button" class="moon big" data-act="sleep-now">いまから寝る</button>`;
     const wakeBtn = `<button type="button" class="${morning && !hasNight(d0) ? "primary" : ""} big" data-act="wake-start">いま起きた</button>`;
@@ -594,9 +608,26 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       customTags = customTags.filter((x) => x !== b.dataset.tag); renderToday();
       try { await backend.setSettings(); } catch (err) { toast("保存できませんでした"); }
     }
+    else if (act === "drowsy") {
+      const e = entries.find((x) => x.id === b.dataset.id); if (!e) return;
+      const v = Number(b.dataset.v);
+      if (e.wake < Date.now() - 20 * H) ui.answeredY = e.id; // keep yesterday's row visible after answering
+      b.disabled = true;
+      try { await backend.put(e.id, { ...stripId(e), dayDrowsy: e.dayDrowsy === v ? null : v }); } catch (err) { toast("保存できませんでした"); }
+      b.disabled = false;
+    }
     else if (act === "fclose") { (ui.followClosed ||= new Set()).add(b.dataset.id); renderToday(); }
     else if (act === "edit-main") startEdit(b.dataset.id);
   });
+
+  // The night that a day's sleepiness belongs to: the longest sleep that ended that day.
+  function mainOf(d0) {
+    const list = byWakeDay().get(dayKey(d0)); if (!list) return null;
+    const kn = list.filter(known);
+    return (kn.length ? kn : list).reduce((a, b) => (b.wake - b.bed > a.wake - a.bed ? b : a));
+  }
+  const drowsyRow = (e, label) => `<div class="tag-group"><span class="label">${label}</span>
+    <div class="tags left" role="group" aria-label="${label}">${DROWSY.map(([v, t]) => `<button type="button" data-act="drowsy" data-id="${e.id}" data-v="${v}" aria-pressed="${e.dayDrowsy === v}">${t}</button>`).join("")}</div></div>`;
 
   // Chips in two groups: before bed (built-in + user-added) and during the night.
   // bedMs (optional) adds the clock time each cut-off falls on for that night.
@@ -653,7 +684,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     else { const d = new Date(now); d.setHours(23, 0, 0, 0); bed = d.getTime(); wake = bed + 8 * 3600000; }
     $("bed").value = toLocalInput(roundTo5(bed));
     $("wake").value = toLocalInput(wake);
-    $("note").value = ""; $("q0").checked = true; $("edit-id").value = ""; formTags = []; renderFormTags();
+    $("note").value = ""; $("drowsy").value = ""; $("q0").checked = true; $("edit-id").value = ""; formTags = []; renderFormTags();
     $("btn-cancel").hidden = true; $("btn-save").textContent = "記録を保存";
     updatePreview();
   }
@@ -686,7 +717,8 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     if (err) { updatePreview(); return; }
     const id = $("edit-id").value;
     const prev = id ? entries.find((x) => x.id === id) : null;
-    const data = { ...(prev ? stripId(prev) : { tags: [] }), bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note, tags: [...formTags], bedUnknown: false };
+    const data = { ...(prev ? stripId(prev) : { tags: [] }), bed: f.bed, wake: f.wake || null, quality: f.quality, note: f.note, tags: [...formTags], bedUnknown: false,
+      dayDrowsy: $("drowsy").value === "" ? null : Number($("drowsy").value) };
     try {
       if (id) await backend.put(id, data); else await backend.add(data);
       toast(id ? "記録を更新しました" : "記録を保存しました");
@@ -702,7 +734,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
     $("edit-id").value = id;
     $("bed").value = toLocalInput(e.bed);
     $("wake").value = e.wake ? toLocalInput(e.wake) : (e.bed < Date.now() - 20 * 3600000 ? "" : toLocalInput(roundTo5(Date.now())));
-    $("note").value = e.note || ""; formTags = [...e.tags]; renderFormTags();
+    $("note").value = e.note || ""; $("drowsy").value = e.dayDrowsy == null ? "" : String(e.dayDrowsy); formTags = [...e.tags]; renderFormTags();
     ($("q" + (e.quality || 0)) || $("q0")).checked = true;
     $("btn-cancel").hidden = false; $("btn-save").textContent = "変更を保存";
     updatePreview();
@@ -739,6 +771,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
       return { tags: parts.filter((t) => LEGACY_TAGS.includes(t)), note: parts.filter((t) => !LEGACY_TAGS.includes(t)).join("、") };
     })(),
     src: typeof d.src === "string" ? d.src : "manual", bedUnknown: d.bedUnknown === true,
+    dayDrowsy: d.dayDrowsy === 0 || d.dayDrowsy === 1 || d.dayDrowsy === 2 ? d.dayDrowsy : null,
   });
 
   function useLocal(reason) {
