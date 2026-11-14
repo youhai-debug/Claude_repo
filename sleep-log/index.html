@@ -420,7 +420,7 @@ footer { font-size: .76rem; color: var(--muted); line-height: 1.6; }
   // Phone use is near-daily (dimmed, warm screen), so record only what varies: stimulating content and delayed bedtime.
   const BEFORE = [...Object.keys(CUTOFF), "寝る前に頭が冴える内容", "スマホで寝るのが遅れた", "日中に運動した", "朝に日光を浴びた", "寝る前ストレッチ", "寝る1〜2時間前に入浴", "考えごと・ストレス"];
   // What the night itself was like.
-  const NIGHT = ["朝帰り", "寝つけなかった", "夜中に起きた", "暑い・寒い", "物音・明るさ"];
+  const NIGHT = ["朝帰り", "寝つけなかった", "夜中に起きた", "二度寝した", "暑い・寒い", "物音・明るさ"];
   const TAGS = [...BEFORE, ...NIGHT];
   const LEGACY_TAGS = [...TAGS, "お酒"];
   const median = (a) => { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
